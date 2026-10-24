@@ -20,6 +20,8 @@ class Employee:
     max_weekly_hours: int = 40
     email: str = ""
     phone: str = ""
+    password: str = "employee123"
+    role: str = "employee"  # "admin" or "employee"
 
     def to_dict(self):
         return asdict(self)
@@ -37,6 +39,13 @@ class LeaveRequest:
     confidence: float = 1.0
     explanation: str = ""
     created_at: str = field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    is_urgent: bool = False
+    proof_filename: Optional[str] = None
+    proof_data_url: Optional[str] = None
+    ai_decision: Optional[str] = "PENDING"  # APPROVED, REJECTED, PENDING_MANAGER
+    reason_importance: str = "MEDIUM"  # CRITICAL, HIGH, MEDIUM, LOW
+    exploitation_risk_score: float = 0.0
+    pattern_analysis: str = ""
 
     def to_dict(self):
         return asdict(self)
@@ -76,6 +85,23 @@ class ConflictDetail:
     reason: str
     contributing_factors: List[str]
     suggested_action: str
+
+    def to_dict(self):
+        return asdict(self)
+
+@dataclass
+class ReplacementAudit:
+    id: str
+    slot_id: str
+    day_of_week: str
+    shift_type: str
+    role: str
+    original_employee_id: str
+    original_employee_name: str
+    replaced_by_id: str
+    replaced_by_name: str
+    reason: str = "Unplanned Absence"
+    created_at: str = field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     def to_dict(self):
         return asdict(self)

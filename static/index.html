@@ -3,531 +3,561 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoRoster AI | Intelligent Shift Scheduling MVP</title>
+  <title>AutoRoster AI | Intelligent Workforce Scheduling Platform</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- Top Navigation Bar -->
-  <header class="app-header">
-    <div class="brand">
-      <div class="brand-icon">⚡</div>
-      <div class="brand-text">
-        <h1>AutoRoster <span class="brand-badge">MVP Hackathon</span></h1>
+  <!-- ========================================== -->
+  <!-- 1. LOGIN SCREEN VIEW                       -->
+  <!-- ========================================== -->
+  <div id="view-login" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-brand-icon">⚡</div>
+        <h1 class="login-title">AutoRoster AI</h1>
+        <p class="login-subtitle">Workforce Operations & Shift Optimization Platform</p>
       </div>
-    </div>
-    <div class="header-actions">
-      <button class="btn btn-secondary btn-sm" id="btn-reset-data" title="Reset all data back to original seed state">
-        🔄 Reset Seed Data
-      </button>
-      <button class="btn btn-primary btn-sm" id="btn-open-pitch">
-        🎙️ Demo Script & Pitch
-      </button>
-    </div>
-  </header>
 
-  <!-- Screen Tabs -->
-  <nav class="tab-nav">
-    <button class="tab-btn active" data-tab="tab-staff">
-      <span>1. Staff & Skills</span>
-      <span class="tab-badge" id="badge-staff-count">8</span>
-    </button>
-    <button class="tab-btn" data-tab="tab-leave">
-      <span>2. AI Leave & Availability</span>
-      <span class="tab-badge" id="badge-leave-count">1</span>
-    </button>
-    <button class="tab-btn" data-tab="tab-roster">
-      <span>3. Weekly Roster & Solver</span>
-      <span class="tab-badge" id="badge-roster-status">Ready</span>
-    </button>
-    <button class="tab-btn" data-tab="tab-replacement">
-      <span>4. Absence & Replacements</span>
-      <span class="tab-badge" id="badge-absence-count">0</span>
-    </button>
-    <button class="tab-btn" data-tab="tab-pitch">
-      <span>📋 Pitch & Demo Guide</span>
-    </button>
-  </nav>
-
-  <!-- Main Container -->
-  <main class="main-content">
-
-    <!-- ========================================== -->
-    <!-- SCREEN 1: STAFF & SKILLS                   -->
-    <!-- ========================================== -->
-    <section id="tab-staff" class="tab-panel active">
-      <div class="grid-2">
-        <!-- Add Staff Form -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title"><span>➕</span> Add Employee</h2>
-            <span class="badge badge-supervisor">Form Validation Active</span>
-          </div>
-
-          <form id="form-add-employee">
-            <div id="staff-form-error" class="alert alert-danger" style="display: none;"></div>
-
-            <div class="form-group">
-              <label class="form-label" for="emp-name">Full Name *</label>
-              <input type="text" id="emp-name" class="form-input" placeholder="e.g. Maya Lin" required>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Qualified Skills * (Select at least one)</label>
-              <div class="skill-chips" id="skill-chips-container">
-                <!-- Dynamically generated or seeded -->
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="emp-hours">
-                Max Weekly Hours: <span id="hours-display" style="font-weight:700; color:var(--primary);">32h</span>
-              </label>
-              <input type="range" id="emp-hours" class="form-input" min="16" max="40" step="8" value="32" style="cursor: pointer;">
-              <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--slate-500); margin-top:0.25rem;">
-                <span>16h (2 shifts)</span>
-                <span>24h (3 shifts)</span>
-                <span>32h (4 shifts)</span>
-                <span>40h (5 shifts)</span>
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div class="form-group">
-                <label class="form-label" for="emp-email">Email Address</label>
-                <input type="email" id="emp-email" class="form-input" placeholder="maya.l@vibecafe.com">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="emp-phone">Phone</label>
-                <input type="text" id="emp-phone" class="form-input" placeholder="555-0199">
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-primary" id="btn-submit-employee" style="width: 100%;">
-              <span>Add Employee</span>
-            </button>
-          </form>
-        </div>
-
-        <!-- Staff Summary & List -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title"><span>👥</span> Active Staff Directory</h2>
-              <button class="btn btn-secondary btn-sm" id="btn-quick-seed">Seed Preset (8 Staff)</button>
-            </div>
-
-            <div id="staff-loading" class="empty-state" style="display: none;">
-              <div class="spinner spinner-dark"></div>
-              <p style="margin-top:0.5rem;">Loading staff roster...</p>
-            </div>
-
-            <div id="staff-empty" class="empty-state" style="display: none;">
-              <div class="empty-state-icon">🧑‍🍳</div>
-              <div class="empty-state-title">No Employees Found</div>
-              <div class="empty-state-desc">The employee database is currently empty. Add your first team member using the form or restore seed staff.</div>
-              <button class="btn btn-primary btn-sm" onclick="app.resetSeedData()">Load Seed Staff</button>
-            </div>
-
-            <div id="staff-list" class="grid-2" style="max-height: 520px; overflow-y: auto; padding-right: 4px;">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </div>
+      <!-- Role Selector Tabs -->
+      <div class="login-role-tabs">
+        <button class="login-role-btn active" data-login-role="admin">
+          <span>👑 Manager / Staff Admin</span>
+        </button>
+        <button class="login-role-btn" data-login-role="employee">
+          <span>☕ Team Member / Employee</span>
+        </button>
       </div>
-    </section>
 
-    <!-- ========================================== -->
-    <!-- SCREEN 2: AI LEAVE & AVAILABILITY          -->
-    <!-- ========================================== -->
-    <section id="tab-leave" class="tab-panel">
-      <div class="grid-2">
-        <!-- AI Free Text Ingestion Box -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title"><span>🤖</span> AI Availability Parser</h2>
-            <span class="badge badge-cashier">Zero-Shot NLP</span>
-          </div>
-
-          <p style="font-size:0.85rem; color:var(--slate-600); margin-bottom:1rem;">
-            Turn messy employee messages from WhatsApp or SMS into structured leave requests with zero manual data entry.
-          </p>
-
-          <!-- Quick Presets for Demo -->
-          <div class="form-group">
-            <label class="form-label">⚡ 1-Click Messy Message Presets (Demo Ready):</label>
-            <div class="preset-chips" id="preset-messages-container">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top: 1rem;">
-            <label class="form-label" for="leave-emp-select">Employee Sender</label>
-            <select id="leave-emp-select" class="form-select">
-              <!-- Populated by JS -->
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="raw-message-text">Messy Free-Text Message *</label>
-            <textarea id="raw-message-text" class="form-textarea" placeholder="e.g. Hey boss, sister is getting married next week, so I cannot work Friday evening. Thanks!"></textarea>
-          </div>
-
-          <button class="btn btn-primary" id="btn-parse-ai" style="width: 100%;">
-            <span>Parse with AI</span>
+      <!-- Quick 1-Click Demo Login Selector -->
+      <div class="quick-login-section">
+        <span class="quick-login-label">Quick 1-Click Demo Credentials:</span>
+        <div class="quick-login-chips" id="quick-login-chips">
+          <button type="button" class="btn-chip" data-email="admin@vibecafe.com" data-pass="admin123" data-role="admin">
+            👑 General Manager (Sarah)
           </button>
-
-          <!-- Structured Parse Preview -->
-          <div id="ai-parse-result" style="display: none; margin-top: 1.25rem; background: var(--primary-light); border: 1px solid #c7d2fe; border-radius: 8px; padding: 1rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-              <span style="font-weight:700; color:var(--primary); font-size:0.9rem;">✨ AI Structured Extraction</span>
-              <span class="badge" style="background:#4338ca; color:white;" id="parse-confidence">96% Confident</span>
-            </div>
-
-            <div style="font-size:0.85rem; display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-bottom:0.75rem;">
-              <div><strong>Day:</strong> <span id="parse-day">Friday</span></div>
-              <div><strong>Shift:</strong> <span id="parse-shift">Evening</span></div>
-              <div style="grid-column: 1 / -1;"><strong>Reason:</strong> <span id="parse-reason">Sister's Wedding</span></div>
-            </div>
-
-            <div style="font-size:0.8rem; color:var(--slate-600); margin-bottom:1rem; font-style: italic;" id="parse-explanation">
-              Identified Day='Friday', Shift='Evening', Reason='Family Wedding'.
-            </div>
-
-            <button class="btn btn-success btn-sm" id="btn-submit-parsed-leave" style="width: 100%;">
-              <span>Submit to Manager Queue</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Manager Review & Approval Queue -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title"><span>📥</span> Manager Approval Queue</h2>
-            <div style="display:flex; gap:0.35rem;">
-              <button class="btn btn-secondary btn-sm filter-leave-btn active" data-filter="ALL">All</button>
-              <button class="btn btn-secondary btn-sm filter-leave-btn" data-filter="PENDING">Pending</button>
-              <button class="btn btn-secondary btn-sm filter-leave-btn" data-filter="APPROVED">Approved</button>
-            </div>
-          </div>
-
-          <div id="leave-empty" class="empty-state" style="display: none;">
-            <div class="empty-state-icon">📬</div>
-            <div class="empty-state-title">No Requests in Queue</div>
-            <div class="empty-state-desc">Try parsing one of the sample messy messages on the left!</div>
-          </div>
-
-          <div id="leave-list" style="max-height: 520px; overflow-y: auto;">
-            <!-- Populated by JS -->
-          </div>
+          <button type="button" class="btn-chip" data-email="alex@vibecafe.com" data-pass="employee123" data-role="employee">
+            ☕ Alex Rivera (Supervisor)
+          </button>
+          <button type="button" class="btn-chip" data-email="bianca@vibecafe.com" data-pass="employee123" data-role="employee">
+            ☕ Bianca Chen (Barista)
+          </button>
+          <button type="button" class="btn-chip" data-email="carlos@vibecafe.com" data-pass="employee123" data-role="employee">
+            🍳 Carlos Gomez (Cook)
+          </button>
         </div>
       </div>
-    </section>
+
+      <form id="form-login" class="login-form">
+        <div id="login-error-alert" class="alert alert-danger" style="display: none;"></div>
+
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email Address</label>
+          <input type="email" id="login-email" class="form-input" placeholder="e.g. admin@vibecafe.com" value="admin@vibecafe.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-input" placeholder="Enter password" value="admin123" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-login-submit">
+          <span>Sign In to Portal →</span>
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <span>Google OR-Tools CP-SAT Engine • Machine Learning Anti-Exploitation</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- 2. MAIN APPLICATION (PORTAL)               -->
+  <!-- ========================================== -->
+  <div id="view-app" class="app-layout" style="display: none;">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h1>AutoRoster <span class="brand-tag">AI Enterprise</span></h1>
+        </div>
+      </div>
+
+      <!-- Current User & Session Control -->
+      <div class="header-user-bar">
+        <div class="user-profile-badge">
+          <span class="user-avatar" id="header-user-avatar">GM</span>
+          <div class="user-details">
+            <span class="user-name" id="header-user-name">Sarah Connor</span>
+            <span class="user-role-badge" id="header-user-role">Admin</span>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-sm" id="btn-reset-data" title="Reset all data back to pristine seed state">
+          🔄 Reset Seed
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-open-pitch">
+          🎙️ Pitch Deck
+        </button>
+        <button class="btn btn-outline-danger btn-sm" id="btn-logout" title="Sign out of current account">
+          🚪 Sign Out
+        </button>
+      </div>
+    </header>
+
 
     <!-- ========================================== -->
-    <!-- SCREEN 3: WEEKLY ROSTER & SOLVER           -->
+    <!-- 3. ADMIN PORTAL                            -->
     <!-- ========================================== -->
-    <section id="tab-roster" class="tab-panel">
-      <!-- Solver Action Bar -->
-      <div class="card" style="margin-bottom: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-          <div>
-            <h2 class="card-title" style="margin-bottom: 0.25rem;">
-              <span>📅</span> Weekly Master Roster (Mon – Sun)
-            </h2>
-            <p style="font-size: 0.825rem; color: var(--slate-600);">
-              Hard-constraint CSP engine: enforces Shift Coverage, Approved Leave, Skills, Weekly Caps, and Max 1 shift/day.
-            </p>
-          </div>
+    <div id="portal-admin" class="portal-container" style="display: none;">
+      <!-- Admin Sub Navigation Tabs -->
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-admin-tab="tab-staff-directory">
+          <span>👥 Active Staff Directory</span>
+          <span class="tab-badge" id="badge-admin-staff-count">8</span>
+        </button>
+        <button class="tab-btn" data-admin-tab="tab-add-employee">
+          <span>➕ Add Employee</span>
+        </button>
+        <button class="tab-btn" data-admin-tab="tab-leave-log">
+          <span>📋 Leave Decision Log</span>
+          <span class="tab-badge" id="badge-admin-log-count">2</span>
+        </button>
+        <button class="tab-btn" data-admin-tab="tab-urgent-leaves">
+          <span>🚨 Urgent Leaves & Proofs</span>
+          <span class="tab-badge badge-warning" id="badge-admin-urgent-count">1</span>
+        </button>
+        <button class="tab-btn" data-admin-tab="tab-roster">
+          <span>📅 Weekly Master Roster</span>
+          <span class="tab-badge" id="badge-roster-status">Ready</span>
+        </button>
+        <button class="tab-btn" data-admin-tab="tab-replacement-audit">
+          <span>🔄 Replaced Staff Audit</span>
+          <span class="tab-badge" id="badge-admin-audit-count">1</span>
+        </button>
+      </nav>
 
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button class="btn btn-warning btn-sm" id="btn-trigger-impossible" title="Inject an impossible scenario to prove the solver never fakes results">
-              ⚠️ Trigger Impossible Scenario
-            </button>
-            <button class="btn btn-primary" id="btn-generate-roster">
-              <span>✨ Generate Weekly Roster</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Infeasible Conflict Alert Banner -->
-      <div id="roster-conflict-banner" class="alert alert-danger" style="display: none;">
-        <div style="font-size: 1.5rem; line-height: 1;">🚫</div>
-        <div style="flex: 1;">
-          <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;" id="conflict-main-title">
-            No Feasible Schedule Found
-          </h3>
-          <p style="font-size: 0.875rem; margin-bottom: 0.5rem;" id="conflict-main-desc">
-            The solver proved mathematically that no valid roster exists without violating hard constraints.
-          </p>
-          <div id="conflict-details-container" style="background: white; border-radius: 6px; padding: 0.75rem; font-size: 0.825rem; border: 1px solid #fecaca;">
-            <!-- Filled by JS -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Success Banner & Stats -->
-      <div id="roster-success-banner" class="alert alert-success" style="display: none;">
-        <div style="font-size: 1.5rem; line-height: 1;">✅</div>
-        <div style="flex: 1;">
-          <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.2rem;">
-            Roster Generated Successfully (0 Violations)
-          </h3>
-          <p style="font-size: 0.85rem;" id="roster-summary-text">
-            All 32 shift requirements filled. All approved leaves respected. No employee exceeds weekly hours or works >1 shift/day.
-          </p>
-          <div id="roster-hours-breakdown" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem;">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Roster Empty State -->
-      <div id="roster-empty" class="card empty-state">
-        <div class="empty-state-icon">🗓️</div>
-        <div class="empty-state-title">Roster Not Generated Yet</div>
-        <div class="empty-state-desc">Click "Generate Weekly Roster" above to solve the schedule using your team and approved leave requests.</div>
-        <button class="btn btn-primary btn-sm" onclick="app.generateRoster()">✨ Generate Roster Now</button>
-      </div>
-
-      <!-- 7-Day Calendar Grid -->
-      <div id="roster-calendar-wrapper" class="card" style="padding: 0; overflow: hidden; display: none;">
-        <table class="roster-table">
-          <thead>
-            <tr>
-              <th style="width: 110px;">Shift</th>
-              <th>Mon</th>
-              <th>Tue</th>
-              <th>Wed</th>
-              <th>Thu</th>
-              <th>Fri</th>
-              <th>Sat</th>
-              <th>Sun</th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Morning Row -->
-            <tr>
-              <td class="shift-label-col">
-                <strong>Morning</strong><br>
-                <span style="font-size: 0.72rem; color: var(--slate-500);">08:00 - 16:00<br>(8 Hours)</span>
-              </td>
-              <td id="cell-Monday-Morning"></td>
-              <td id="cell-Tuesday-Morning"></td>
-              <td id="cell-Wednesday-Morning"></td>
-              <td id="cell-Thursday-Morning"></td>
-              <td id="cell-Friday-Morning"></td>
-              <td id="cell-Saturday-Morning"></td>
-              <td id="cell-Sunday-Morning"></td>
-            </tr>
-            <!-- Evening Row -->
-            <tr>
-              <td class="shift-label-col">
-                <strong>Evening</strong><br>
-                <span style="font-size: 0.72rem; color: var(--slate-500);">16:00 - 00:00<br>(8 Hours)</span>
-              </td>
-              <td id="cell-Monday-Evening"></td>
-              <td id="cell-Tuesday-Evening"></td>
-              <td id="cell-Wednesday-Evening"></td>
-              <td id="cell-Thursday-Evening"></td>
-              <td id="cell-Friday-Evening"></td>
-              <td id="cell-Saturday-Evening"></td>
-              <td id="cell-Sunday-Evening"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ========================================== -->
-    <!-- SCREEN 4: ABSENCE & RANKED REPLACEMENTS    -->
-    <!-- ========================================== -->
-    <section id="tab-replacement" class="tab-panel">
-      <div class="grid-2">
-        <!-- Left: Absent Shift Context -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title"><span>🚨</span> Unplanned Absence / Call-Out</h2>
-              <span class="badge badge-rejected" id="absence-badge">Slot Needs Cover</span>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="absence-slot-picker">Select Shift Slot to Mark Absent</label>
-              <select id="absence-slot-picker" class="form-select">
-                <!-- Populated from active roster -->
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="absence-reason">Absence Reason</label>
-              <input type="text" id="absence-reason" class="form-input" value="Sudden illness / Flu call-out">
-            </div>
-
-            <button class="btn btn-danger btn-sm" id="btn-mark-absent-action" style="width: 100%; margin-bottom: 1rem;">
-              <span>Mark Staff Absent & Find Replacements</span>
-            </button>
-
-            <!-- Active Vacancy Summary Card -->
-            <div id="active-vacancy-card" style="display: none; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 1rem;">
-              <h4 style="color: #be123c; font-size: 0.95rem; margin-bottom: 0.4rem;">
-                ⚠️ Vacant Shift Slot Details
-              </h4>
-              <div style="font-size: 0.85rem; line-height: 1.6;">
-                <div><strong>Day & Shift:</strong> <span id="vacant-day-shift">Friday Evening</span></div>
-                <div><strong>Required Role:</strong> <span id="vacant-role" class="badge badge-cook">Cook</span></div>
-                <div><strong>Original Employee:</strong> <span id="vacant-original-staff" style="text-decoration: line-through; color: #881337;">Carlos Gomez</span></div>
-                <div><strong>Call-Out Reason:</strong> <span id="vacant-reason">Sudden illness</span></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Ineligible Staff Breakdown -->
-          <div class="card" id="ineligible-card" style="display: none;">
-            <div class="card-header">
-              <h2 class="card-title" style="font-size: 0.95rem;">
-                <span>❌</span> Ineligible Staff (<span id="ineligible-count">0</span>)
-              </h2>
-            </div>
-            <p style="font-size: 0.8rem; color: var(--slate-600); margin-bottom: 0.75rem;">
-              Strict constraint enforcement guarantees no illegal substitutions:
-            </p>
-            <div id="ineligible-list" style="font-size: 0.8rem; line-height: 1.6;">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Ranked Replacement Candidates -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title"><span>🎯</span> Ranked Replacements (<span id="eligible-count">0</span>)</h2>
-              <span class="badge badge-supervisor">Deterministic Fair Scoring</span>
-            </div>
-
-            <div id="replacement-empty" class="empty-state">
-              <div class="empty-state-icon">📋</div>
-              <div class="empty-state-title">No Absence Active</div>
-              <div class="empty-state-desc">Select an assigned shift on the left or click "Mark Absent" on any shift in Screen 3 to compute ranked replacements.</div>
-            </div>
-
-            <div id="replacement-loading" class="empty-state" style="display: none;">
-              <div class="spinner spinner-dark"></div>
-              <p style="margin-top: 0.5rem;">Evaluating hard constraints & ranking substitutes...</p>
-            </div>
-
-            <div id="replacement-list">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ========================================== -->
-    <!-- SCREEN 5: PITCH DECK & DEMO SCRIPT GUIDE   -->
-    <!-- ========================================== -->
-    <section id="tab-pitch" class="tab-panel">
-      <div class="grid-2">
-        <!-- 3-Minute Demo Script -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title"><span>⏱️</span> 3-Minute Live Demo Script</h2>
-            <span class="badge badge-supervisor">Member 3 Deliverable</span>
-          </div>
-
-          <div class="guide-content">
-            <div class="guide-step">
-              <div class="guide-step-num">1</div>
-              <div>
-                <strong>Minute 0:00 – The Problem Hook</strong><br>
-                <em style="color:var(--slate-600); font-size:0.875rem;">
-                  "Every shift manager in hospitality loses 6 hours every weekend wrestling with WhatsApp leave requests, spreadsheet conflicts, and last-minute call-outs."
-                </em>
-              </div>
-            </div>
-
-            <div class="guide-step">
-              <div class="guide-step-num">2</div>
-              <div>
-                <strong>Minute 0:45 – AI Ingestion & Approval (Screen 2)</strong><br>
-                <em style="color:var(--slate-600); font-size:0.875rem;">
-                  "Watch this: Bianca sends a messy WhatsApp message: 'Sister getting married Friday evening'. With 1 click, our NLP parser extracts Friday Evening + Wedding reason with 96% confidence. The manager approves it."
-                </em>
-              </div>
-            </div>
-
-            <div class="guide-step">
-              <div class="guide-step-num">3</div>
-              <div>
-                <strong>Minute 1:30 – Hard-Constraint Solver (Screen 3)</strong><br>
-                <em style="color:var(--slate-600); font-size:0.875rem;">
-                  "We click 'Generate Weekly Roster'. In 2 milliseconds, the CSP solver finds a schedule respecting all 5 hard constraints: coverage, leave, skills, max weekly hours, and max 1 shift/day."
-                </em>
-              </div>
-            </div>
-
-            <div class="guide-step">
-              <div class="guide-step-num">4</div>
-              <div>
-                <strong>Minute 2:00 – Truthful Conflict Detection</strong><br>
-                <em style="color:var(--slate-600); font-size:0.875rem;">
-                  "Now watch what happens when all supervisors take Friday off. We hit 'Trigger Impossible Scenario'. Unlike hallucinating LLMs, our solver never fakes a result—it explains WHICH requirements conflict in plain English."
-                </em>
-              </div>
-            </div>
-
-            <div class="guide-step">
-              <div class="guide-step-num">5</div>
-              <div>
-                <strong>Minute 2:30 – 1-Click Ranked Replacement (Screen 4)</strong><br>
-                <em style="color:var(--slate-600); font-size:0.875rem;">
-                  "Carlos calls out sick with the flu. We mark him absent. The algorithm filters out ineligible staff (working same day, no cook skill, or overtime cap) and ranks eligible staff by burnout headroom. 1 click assigns the replacement."
-                </em>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pitch Deck Outline -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title"><span>🚀</span> Pitch Deck Outline</h2>
-            <span class="badge badge-cashier">Judge Presentation</span>
-          </div>
-
-          <div style="font-size:0.875rem; line-height:1.7;">
-            <div style="margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--slate-100);">
-              <h4 style="color:var(--primary); font-size:0.95rem;">1. Problem</h4>
-              <p>Over 1.2M restaurants & retail stores still schedule shifts manually. Shift managers waste 20+ hours a month managing WhatsApp messages, causing payroll overtime leaks, understaffed shifts, and high employee turnover.</p>
-            </div>
-
-            <div style="margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--slate-100);">
-              <h4 style="color:var(--primary); font-size:0.95rem;">2. Solution: AutoRoster AI</h4>
-              <p>An intelligent scheduling assistant that converts messy human messages into structured constraints, solves the weekly roster mathematically in milliseconds, and instantly handles emergency call-outs.</p>
-            </div>
-
-            <div style="margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--slate-100);">
-              <h4 style="color:var(--primary); font-size:0.95rem;">3. Why We Win: Truthful Constraint Solving</h4>
-              <p>Other AI tools hallucinate schedules that break labor laws or double-book workers. AutoRoster uses strict CSP logic: if a schedule is mathematically impossible, it diagnoses and explains the exact bottleneck.</p>
-            </div>
-
+      <main class="main-content">
+        <!-- ADMIN TAB 1: ACTIVE STAFF DIRECTORY -->
+        <section id="tab-staff-directory" class="tab-panel active">
+          <div class="section-heading-row">
             <div>
-              <h4 style="color:var(--primary); font-size:0.95rem;">4. Unit Economics & ROI</h4>
-              <p><strong>Pricing:</strong> $49 / month per location.<br>
-              <strong>ROI:</strong> Saves $850/month in manager labor + $600/month in accidental overtime.</p>
+              <h2 class="section-title">Active Staff Directory</h2>
+              <p class="section-subtitle">Real-time team members, certified skill badges, weekly hour caps, and administrative actions.</p>
+            </div>
+            <div>
+              <button class="btn btn-primary btn-sm" onclick="switchAdminTab('tab-add-employee')">
+                + Register New Staff
+              </button>
             </div>
           </div>
-        </div>
+
+          <div class="staff-grid" id="staff-directory-grid">
+            <!-- Populated dynamically with color skill badges, email, weekly hours, and delete button -->
+          </div>
+        </section>
+
+        <!-- ADMIN TAB 2: ADD EMPLOYEE FORM -->
+        <section id="tab-add-employee" class="tab-panel">
+          <div class="card card-center-max">
+            <div class="card-header">
+              <h2 class="card-title"><span>➕</span> Register New Employee</h2>
+              <span class="badge badge-supervisor">Admin Privilege</span>
+            </div>
+
+            <form id="form-admin-add-employee">
+              <div id="add-emp-error" class="alert alert-danger" style="display: none;"></div>
+
+              <div class="form-group">
+                <label class="form-label" for="add-emp-name">Full Name *</label>
+                <input type="text" id="add-emp-name" class="form-input" placeholder="e.g. Maya Lin" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="add-emp-email">Company Email Address *</label>
+                <input type="email" id="add-emp-email" class="form-input" placeholder="e.g. maya@vibecafe.com" required>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Certified Skills * (Select all that apply)</label>
+                <div class="skill-chips" id="admin-skill-chips-container">
+                  <!-- Skill chips dynamically populated -->
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="add-emp-hours">
+                  Maximum Weekly Work Hours (Hard Cap): <span id="add-hours-display" style="font-weight:700; color:var(--primary);">32h</span>
+                </label>
+                <input type="range" id="add-emp-hours" class="form-input" min="16" max="40" step="8" value="32" style="cursor: pointer;">
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--slate-500); margin-top:0.25rem;">
+                  <span>16h (2 shifts)</span>
+                  <span>24h (3 shifts)</span>
+                  <span>32h (4 shifts)</span>
+                  <span>40h (5 shifts)</span>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-block btn-lg">
+                <span>Save & Register Employee</span>
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- ADMIN TAB 3: LEAVE DECISION LOG -->
+        <section id="tab-leave-log" class="tab-panel">
+          <div class="section-heading-row">
+            <div>
+              <h2 class="section-title">Leave Decision & Request Log</h2>
+              <p class="section-subtitle">Audit trail of all processed leave requests. <strong>Click any record</strong> to inspect the employee's original message, AI importance evaluation, and pattern analysis.</p>
+            </div>
+            <div class="filter-pills" id="log-filter-pills">
+              <button class="btn-chip active" data-log-filter="ALL">All Requests</button>
+              <button class="btn-chip" data-log-filter="APPROVED">Approved Only</button>
+              <button class="btn-chip" data-log-filter="REJECTED">Rejected Only</button>
+              <button class="btn-chip" data-log-filter="PENDING">Pending Review</button>
+            </div>
+          </div>
+
+          <div class="card p-0">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Date Issued</th>
+                    <th>Employee</th>
+                    <th>Target Shift</th>
+                    <th>Reason (Approved/Reported)</th>
+                    <th>Importance</th>
+                    <th>Anti-Exploitation Risk</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="leave-log-tbody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMIN TAB 4: URGENT LEAVES & PROOFS -->
+        <section id="tab-urgent-leaves" class="tab-panel">
+          <div class="section-heading-row">
+            <div>
+              <h2 class="section-title">Urgent Leaves & Document Proofs</h2>
+              <p class="section-subtitle">Emergency medical leave requests requiring manual managerial review. Inspect uploaded proof certificates and approve or reject.</p>
+            </div>
+          </div>
+
+          <div id="urgent-leaves-container" class="urgent-leaves-grid">
+            <!-- Dynamically populated -->
+          </div>
+        </section>
+
+        <!-- ADMIN TAB 5: WEEKLY MASTER ROSTER -->
+        <section id="tab-roster" class="tab-panel">
+          <!-- Solver Controls & Conflict Banner -->
+          <div class="solver-controls card">
+            <div class="solver-controls-header">
+              <div>
+                <span class="badge badge-supervisor">Google OR-Tools CP-SAT</span>
+                <h2 class="card-title mt-1">Mathematical Constraint Shift Solver</h2>
+                <p class="card-subtitle">Enforces Shift Coverage, Approved Leaves, Certified Skills, Weekly Hour Caps, and Max 1 Shift/Day.</p>
+              </div>
+              <div class="solver-buttons">
+                <button class="btn btn-warning btn-sm" id="btn-load-impossible">
+                  ⚠️ Trigger Impossible Scenario
+                </button>
+                <button class="btn btn-primary" id="btn-generate-roster">
+                  ⚡ Generate Weekly Roster
+                </button>
+              </div>
+            </div>
+
+            <!-- Conflict Diagnostic Box -->
+            <div id="conflict-panel" class="conflict-panel" style="display: none;">
+              <!-- Populated when infeasible -->
+            </div>
+          </div>
+
+          <!-- Schedule Calendar Grid -->
+          <div class="card p-0 roster-card">
+            <div class="roster-grid-header">
+              <h3 class="card-title">Weekly Schedule (Monday – Sunday)</h3>
+              <div class="legend-chips">
+                <span class="skill-badge badge-supervisor">Supervisor</span>
+                <span class="skill-badge badge-barista">Barista</span>
+                <span class="skill-badge badge-cook">Cook</span>
+                <span class="skill-badge badge-cashier">Cashier</span>
+                <span class="skill-badge badge-server">Server</span>
+              </div>
+            </div>
+            <div class="roster-calendar-grid" id="admin-roster-grid">
+              <!-- Populated dynamically with 7 day columns -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMIN TAB 6: REPLACED STAFF AUDIT -->
+        <section id="tab-replacement-audit" class="tab-panel">
+          <div class="section-heading-row">
+            <div>
+              <h2 class="section-title">Replaced Staff Audit Menu</h2>
+              <p class="section-subtitle">Complete log of all shifts where an employee called out or took leave, and another staff member covered the slot.</p>
+            </div>
+          </div>
+
+          <div class="card p-0">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Target Shift</th>
+                    <th>Required Role</th>
+                    <th>Original Staff (On Leave/Absent)</th>
+                    <th>Covered By (Replacement)</th>
+                    <th>Reason for Cover</th>
+                    <th>Audit Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="replacement-audit-tbody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- 4. EMPLOYEE PORTAL                         -->
+    <!-- ========================================== -->
+    <div id="portal-employee" class="portal-container" style="display: none;">
+      <!-- Employee Sub Navigation Tabs -->
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-emp-tab="tab-emp-leave">
+          <span>💬 Request Leave (AI Assistant)</span>
+        </button>
+        <button class="tab-btn" data-emp-tab="tab-emp-roster">
+          <span>📅 My Weekly Shifts</span>
+          <span class="tab-badge" id="badge-emp-shifts-count">0</span>
+        </button>
+      </nav>
+
+      <main class="main-content">
+        <!-- EMPLOYEE TAB 1: LEAVE REQUEST VIA AI -->
+        <section id="tab-emp-leave" class="tab-panel active">
+          <div class="grid-2">
+            <!-- Leave Message Form -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <span class="badge badge-supervisor">AI-Powered Leave Evaluation</span>
+                  <h2 class="card-title mt-1">Submit Availability or Leave Request</h2>
+                  <p class="card-subtitle">Type your natural message. Our AI analyzes reason importance and attendance patterns.</p>
+                </div>
+              </div>
+
+              <!-- Quick Presets -->
+              <div class="quick-presets">
+                <span class="quick-presets-label">Quick Presets for Live Testing:</span>
+                <div class="preset-chips">
+                  <button type="button" class="btn-chip" data-preset="Hey boss, my sister is getting married on Friday evening. I need to attend the wedding ceremony!">
+                    🎉 Sister's Wedding (Friday Eve)
+                  </button>
+                  <button type="button" class="btn-chip" data-preset="Doctor appointment on Tuesday morning, unable to work the morning shift.">
+                    🩺 Doctor Appointment (Tuesday Morn)
+                  </button>
+                  <button type="button" class="btn-chip" data-preset="I am not feeling like coming in this Friday evening, just want to chill with friends." data-casual="true">
+                    🎮 Chill / Hangout (Anti-Exploitation Test)
+                  </button>
+                  <button type="button" class="btn-chip" data-preset="Emergency: Admitted to urgent care clinic with severe food poisoning and gastroenteritis. Attached clinic discharge certificate." data-urgent="true">
+                    🚨 Urgent Medical Emergency (With Proof)
+                  </button>
+                </div>
+              </div>
+
+              <form id="form-employee-leave">
+                <div class="form-group">
+                  <label class="form-label" for="emp-leave-text">Describe Your Request *</label>
+                  <textarea id="emp-leave-text" class="form-input" rows="4" placeholder="e.g. Hey boss, I have a dentist appointment on Tuesday morning and won't be able to make it in before 1pm..." required></textarea>
+                </div>
+
+                <!-- Urgent Medical Leave Toggle -->
+                <div class="urgent-toggle-box">
+                  <label class="urgent-toggle-label">
+                    <input type="checkbox" id="emp-is-urgent-checkbox">
+                    <span><strong>🚨 Urgent Medical Leave requiring documented proof</strong></span>
+                  </label>
+                  <p class="urgent-toggle-sub">Urgent medical leaves with uploaded certificates bypass AI auto-rejection and are routed directly to the manager.</p>
+                </div>
+
+                <!-- Proof Document Upload (shown when urgent checked) -->
+                <div id="urgent-proof-upload-section" class="proof-upload-section" style="display: none;">
+                  <label class="form-label">Upload Proof Document (Doctor's Note, Clinic Certificate, or PDF)</label>
+                  <div class="file-upload-dropzone" id="proof-dropzone">
+                    <input type="file" id="proof-file-input" accept=".pdf,.jpg,.jpeg,.png">
+                    <div class="dropzone-text">
+                      <span class="dropzone-icon">📄</span>
+                      <span id="proof-filename-display">Click or drag & drop proof document here (PDF, PNG, JPG)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-submit-emp-leave">
+                  <span>✨ Submit to AI Assistant →</span>
+                </button>
+              </form>
+            </div>
+
+            <!-- Real-time AI Evaluation Result Card -->
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">🤖 AI Decision & Pattern Feedback</h2>
+                <span class="badge badge-barista">Autonomous Engine</span>
+              </div>
+
+              <div id="ai-evaluation-placeholder" class="ai-eval-empty">
+                <div class="empty-icon">🤖</div>
+                <h3>Awaiting Your Request</h3>
+                <p>Submit a leave request on the left. The AI will evaluate reason importance, calculate your anti-exploitation trust score, and provide an instant decision.</p>
+              </div>
+
+              <div id="ai-evaluation-result" class="ai-eval-result" style="display: none;">
+                <!-- AI Decision Banner -->
+                <div id="ai-decision-banner" class="ai-decision-badge approved">
+                  <span id="ai-decision-text">APPROVED</span>
+                </div>
+
+                <div class="ai-metrics-grid">
+                  <div class="ai-metric-item">
+                    <span class="metric-label">Reason Importance</span>
+                    <span class="metric-value" id="ai-metric-importance">HIGH</span>
+                  </div>
+                  <div class="ai-metric-item">
+                    <span class="metric-label">Target Shift</span>
+                    <span class="metric-value" id="ai-metric-target">-</span>
+                  </div>
+                  <div class="ai-metric-item">
+                    <span class="metric-label">Exploitation Risk</span>
+                    <span class="metric-value" id="ai-metric-risk">5%</span>
+                  </div>
+                  <div class="ai-metric-item">
+                    <span class="metric-label">Reliability Trust</span>
+                    <span class="metric-value" id="ai-metric-trust">95%</span>
+                  </div>
+                </div>
+
+                <div class="ai-analysis-box">
+                  <h4>Machine Learning Pattern Explanation:</h4>
+                  <p id="ai-analysis-explanation">-</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- EMPLOYEE TAB 2: MY WEEKLY SHIFTS -->
+        <section id="tab-emp-roster" class="tab-panel">
+          <div class="section-heading-row">
+            <div>
+              <h2 class="section-title">My Weekly Shift Schedule</h2>
+              <p class="section-subtitle">Your assigned shifts for Monday – Sunday. Extra shifts assigned to cover for absent colleagues are prominently highlighted.</p>
+            </div>
+          </div>
+
+          <!-- Employee KPI Stats -->
+          <div class="emp-kpi-grid">
+            <div class="emp-kpi-card">
+              <span class="kpi-label">Assigned Hours This Week</span>
+              <span class="kpi-value" id="emp-kpi-hours">0h / 32h</span>
+              <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="emp-kpi-bar" style="width: 0%;"></div></div>
+            </div>
+            <div class="emp-kpi-card">
+              <span class="kpi-label">Total Assigned Shifts</span>
+              <span class="kpi-value" id="emp-kpi-shifts">0 shifts</span>
+              <span class="kpi-sub">8 hours per shift</span>
+            </div>
+            <div class="emp-kpi-card highlight-card">
+              <span class="kpi-label">Extra Replacement Shifts Covered</span>
+              <span class="kpi-value" id="emp-kpi-extras">0 extra</span>
+              <span class="kpi-sub">Substituted for absent coworkers</span>
+            </div>
+          </div>
+
+          <!-- Personal Schedule Grid -->
+          <div class="card p-0 roster-card">
+            <div class="roster-grid-header">
+              <h3 class="card-title">Assigned Shifts Timeline</h3>
+            </div>
+            <div class="emp-shifts-list" id="emp-shifts-container">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- 5. MODALS & POPUPS                         -->
+  <!-- ========================================== -->
+
+  <!-- Modal: Leave Detail / Raw Message Inspector -->
+  <div id="modal-leave-detail" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Employee Leave Request Details</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-leave-detail')">&times;</button>
       </div>
-    </section>
+      <div class="modal-body" id="modal-leave-detail-body">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
 
-  </main>
+  <!-- Modal: Document Proof Preview -->
+  <div id="modal-proof-preview" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Document Proof Verification</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-proof-preview')">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-proof-body">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
 
-  <!-- Toast Notification Container -->
-  <div id="toast-container"></div>
+  <!-- Modal: Ranked Replacement Selector -->
+  <div id="modal-replacement" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title" id="replacement-modal-title">Ranked Staff Replacements</h3>
+        <button class="modal-close-btn" onclick="closeModal('modal-replacement')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="replacement-target-info" class="replacement-target-info"></div>
+        <h4 class="mt-3 mb-2 font-bold">Recommended Substitutes (Ranked by Availability & Skill Specialization):</h4>
+        <div id="replacement-candidates-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <script src="app.js"></script>
 </body>

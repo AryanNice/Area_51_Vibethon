@@ -1,940 +1,1213 @@
 /**
- * AutoRoster AI MVP Frontend Application.
- * Zero external JS dependencies.
+ * AutoRoster Frontend Application Logic.
+ * Supports:
+ * 1. Role-based Authentication (Admin vs Employee).
+ * 2. Dedicated Admin Portal (Staff Directory, Add Staff, Leave Log with Raw Inspection, Urgent Proofs, CP-SAT Roster, Replacement Audit).
+ * 3. Dedicated Employee Portal (AI Leave Intake, Anti-Exploitation Pattern Learning, Personal Schedule with Substitute Highlights).
+ * 4. Transparent Anti-Exploitation & Mathematical Constraint Verification.
  */
 
-const API_BASE = "";
+// Application Global State
+const state = {
+  currentUser: null, // { id, name, email, role, skills, max_weekly_hours }
+  activeAdminTab: "tab-staff-directory",
+  activeEmpTab: "tab-emp-leave",
+  staff: [],
+  availableSkills: ["Supervisor", "Barista", "Cook", "Cashier", "Server"],
+  leavesLog: [],
+  urgentLeaves: [],
+  replacementAudits: [],
+  roster: [],
+  rosterStatus: "NOT_GENERATED",
+  activeProofFile: null,
+  activeProofDataUrl: null,
+  activeLogFilter: "ALL"
+};
 
-const app = {
-  state: {
-    employees: [],
-    availableSkills: ["Supervisor", "Barista", "Cook", "Cashier", "Server"],
-    leaveRequests: [],
-    sampleMessages: [],
-    currentRoster: null,
-    rosterStats: null,
-    selectedSlotForAbsence: null,
-    leaveFilter: "ALL",
-    lastParsedLeave: null
-  },
+// Document Ready
+document.addEventListener("DOMContentLoaded", () => {
+  initEventListeners();
+  checkPersistedSession();
+});
 
-  async init() {
-    this.bindEvents();
-    this.renderSkillChips();
-    await this.loadEmployees();
-    await this.loadLeaves();
-    await this.loadRoster();
-  },
+/**
+ * Initialize all DOM event listeners
+ */
+function initEventListeners() {
+  // Login Form Submission
+  document.getElementById("form-login")?.addEventListener("submit", handleLogin);
 
-  // --- Toast Notifications ---
-  showToast(message, type = "info") {
-    const container = document.getElementById("toast-container");
-    const toast = document.createElement("div");
-    toast.className = `toast ${type === "error" ? "toast-error" : type === "success" ? "toast-success" : ""}`;
-    const icon = type === "error" ? "⚠️" : type === "success" ? "✅" : "ℹ️";
-    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateY(10px)";
-      toast.style.transition = "all 0.3s ease";
-      setTimeout(() => toast.remove(), 300);
-    }, 3800);
-  },
-
-  // --- Navigation ---
-  bindEvents() {
-    // Tab switching
-    document.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const tabId = btn.getAttribute("data-tab");
-        this.switchTab(tabId);
+  // Quick 1-Click Login Chips
+  document.querySelectorAll(".quick-login-chips .btn-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const email = chip.getAttribute("data-email");
+      const pass = chip.getAttribute("data-pass");
+      const role = chip.getAttribute("data-role");
+      document.getElementById("login-email").value = email;
+      document.getElementById("login-password").value = pass;
+      // Set active role button
+      document.querySelectorAll(".login-role-btn").forEach(b => {
+        b.classList.toggle("active", b.getAttribute("data-login-role") === role);
       });
+      showToast(`Credentials filled for ${chip.textContent.trim()}`, "info");
     });
+  });
 
-    // Pitch guide button in header
-    document.getElementById("btn-open-pitch")?.addEventListener("click", () => {
-      this.switchTab("tab-pitch");
-    });
-
-    // Reset seed data
-    document.getElementById("btn-reset-data")?.addEventListener("click", () => {
-      if (confirm("Reset all staff, leave requests, and schedules to initial seed state?")) {
-        this.resetSeedData();
+  // Login Role Tab Switcher
+  document.querySelectorAll(".login-role-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".login-role-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const role = btn.getAttribute("data-login-role");
+      if (role === "admin") {
+        document.getElementById("login-email").value = "admin@vibecafe.com";
+        document.getElementById("login-password").value = "admin123";
+      } else {
+        document.getElementById("login-email").value = "alex@vibecafe.com";
+        document.getElementById("login-password").value = "employee123";
       }
     });
+  });
 
-    document.getElementById("btn-quick-seed")?.addEventListener("click", () => {
-      this.resetSeedData();
+  // Logout Button
+  document.getElementById("btn-logout")?.addEventListener("click", handleLogout);
+
+  // Reset Seed Button
+  document.getElementById("btn-reset-data")?.addEventListener("click", handleResetSeed);
+
+  // Admin Sub Navigation Tabs
+  document.querySelectorAll(".tab-btn[data-admin-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-admin-tab");
+      switchAdminTab(targetId);
     });
+  });
 
-    // Screen 1: Hours Slider Display
-    const hoursInput = document.getElementById("emp-hours");
-    const hoursDisplay = document.getElementById("hours-display");
-    if (hoursInput && hoursDisplay) {
-      hoursInput.addEventListener("input", (e) => {
-        hoursDisplay.textContent = `${e.target.value}h`;
-      });
-    }
-
-    // Screen 1: Add Employee Form
-    const empForm = document.getElementById("form-add-employee");
-    if (empForm) {
-      empForm.addEventListener("submit", (e) => this.handleAddEmployee(e));
-    }
-
-    // Screen 2: AI Parse Button
-    document.getElementById("btn-parse-ai")?.addEventListener("click", () => {
-      this.handleParseMessage();
+  // Employee Sub Navigation Tabs
+  document.querySelectorAll(".tab-btn[data-emp-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.getAttribute("data-emp-tab");
+      switchEmployeeTab(targetId);
     });
+  });
 
-    // Screen 2: Submit Parsed Leave
-    document.getElementById("btn-submit-parsed-leave")?.addEventListener("click", () => {
-      this.handleSubmitParsedLeave();
+  // Log Filter Pills
+  document.querySelectorAll("#log-filter-pills .btn-chip").forEach(pill => {
+    pill.addEventListener("click", () => {
+      document.querySelectorAll("#log-filter-pills .btn-chip").forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      state.activeLogFilter = pill.getAttribute("data-log-filter");
+      renderLeaveLog();
     });
+  });
 
-    // Screen 2: Filter Leave Requests
-    document.querySelectorAll(".filter-leave-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        document.querySelectorAll(".filter-leave-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        this.state.leaveFilter = btn.getAttribute("data-filter");
-        this.renderLeavesList();
-      });
+  // Admin Add Employee Form
+  document.getElementById("form-admin-add-employee")?.addEventListener("submit", handleAdminAddEmployee);
+
+  // Max Hours Display updates
+  const addHoursInput = document.getElementById("add-emp-hours");
+  if (addHoursInput) {
+    addHoursInput.addEventListener("input", (e) => {
+      const disp = document.getElementById("add-hours-display");
+      if (disp) disp.textContent = `${e.target.value}h`;
     });
+  }
 
-    // Screen 3: Generate Roster Button
-    document.getElementById("btn-generate-roster")?.addEventListener("click", () => {
-      this.generateRoster();
+  // Solver Buttons
+  document.getElementById("btn-generate-roster")?.addEventListener("click", handleGenerateRoster);
+  document.getElementById("btn-load-impossible")?.addEventListener("click", handleLoadImpossible);
+
+  // Employee Presets
+  document.querySelectorAll(".preset-chips .btn-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const text = chip.getAttribute("data-preset");
+      const isUrgent = chip.getAttribute("data-urgent") === "true";
+      const input = document.getElementById("emp-leave-text");
+      const urgentCheckbox = document.getElementById("emp-is-urgent-checkbox");
+      if (input) input.value = text;
+      if (urgentCheckbox) {
+        urgentCheckbox.checked = isUrgent;
+        toggleUrgentProofUpload(isUrgent);
+      }
+      if (isUrgent) {
+        state.activeProofFile = "St_Mary_Hospital_Discharge_Certificate.pdf";
+        state.activeProofDataUrl = "data:application/pdf;base64,mockproofcertificate";
+        const filenameDisp = document.getElementById("proof-filename-display");
+        if (filenameDisp) filenameDisp.textContent = "Attached: St_Mary_Hospital_Discharge_Certificate.pdf (Verified)";
+      }
+      showToast("Preset loaded into leave request box", "info");
     });
+  });
 
-    // Screen 3: Trigger Impossible Scenario Button
-    document.getElementById("btn-trigger-impossible")?.addEventListener("click", () => {
-      this.triggerImpossibleScenario();
+  // Urgent Toggle Checkbox
+  const urgentCheck = document.getElementById("emp-is-urgent-checkbox");
+  if (urgentCheck) {
+    urgentCheck.addEventListener("change", (e) => {
+      toggleUrgentProofUpload(e.target.checked);
     });
+  }
 
-    // Screen 4: Mark Absent Action
-    document.getElementById("btn-mark-absent-action")?.addEventListener("click", () => {
-      this.handleMarkAbsent();
+  // Proof File Upload Input
+  const fileInput = document.getElementById("proof-file-input");
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        state.activeProofFile = file.name;
+        const reader = new FileReader();
+        reader.onload = (loadEvent) => {
+          state.activeProofDataUrl = loadEvent.target.result;
+          const filenameDisp = document.getElementById("proof-filename-display");
+          if (filenameDisp) filenameDisp.textContent = `Attached: ${file.name} (${Math.round(file.size / 1024)} KB)`;
+        };
+        reader.readAsDataURL(file);
+      }
     });
-  },
+  }
 
-  switchTab(tabId) {
-    document.querySelectorAll(".tab-btn").forEach(b => {
-      b.classList.toggle("active", b.getAttribute("data-tab") === tabId);
-    });
-    document.querySelectorAll(".tab-panel").forEach(p => {
-      p.classList.toggle("active", p.id === tabId);
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  },
+  // Employee Leave Form Submit
+  document.getElementById("form-employee-leave")?.addEventListener("submit", handleEmployeeLeaveSubmit);
+}
 
-  // ==========================================
-  // SCREEN 1: STAFF & SKILLS
-  // ==========================================
-  renderSkillChips() {
-    const container = document.getElementById("skill-chips-container");
-    if (!container) return;
-    container.innerHTML = "";
-    this.state.availableSkills.forEach(skill => {
-      const chip = document.createElement("div");
-      chip.innerHTML = `
-        <input type="checkbox" id="skill-${skill}" name="skills" value="${skill}" class="skill-chip-checkbox">
-        <label for="skill-${skill}" class="skill-chip-label">${skill}</label>
-      `;
-      container.appendChild(chip);
-    });
-  },
-
-  async loadEmployees() {
-    const loading = document.getElementById("staff-loading");
-    const empty = document.getElementById("staff-empty");
-    const list = document.getElementById("staff-list");
-
+/**
+ * Check if a session was persisted in localStorage
+ */
+function checkPersistedSession() {
+  const savedUser = localStorage.getItem("autoroster_user");
+  if (savedUser) {
     try {
-      if (loading) loading.style.display = "block";
-      if (empty) empty.style.display = "none";
-
-      const res = await fetch(`${API_BASE}/api/employees`);
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.state.employees = data.data;
-      if (data.available_skills) {
-        this.state.availableSkills = data.available_skills;
-      }
-
-      // Update badge
-      document.getElementById("badge-staff-count").textContent = this.state.employees.length;
-
-      // Update employee dropdown in Screen 2
-      this.populateEmployeeDropdown();
-
-      this.renderEmployeesList();
-    } catch (err) {
-      this.showToast(`Unable to load staff: ${err.message}`, "error");
-    } finally {
-      if (loading) loading.style.display = "none";
+      state.currentUser = JSON.parse(savedUser);
+      showAppView();
+      return;
+    } catch (e) {
+      localStorage.removeItem("autoroster_user");
     }
-  },
+  }
+  showLoginView();
+}
 
-  renderEmployeesList() {
-    const list = document.getElementById("staff-list");
-    const empty = document.getElementById("staff-empty");
-    if (!list) return;
+/**
+ * Handle Login Request
+ */
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value.trim();
+  const errorAlert = document.getElementById("login-error-alert");
 
-    if (this.state.employees.length === 0) {
-      list.innerHTML = "";
-      if (empty) empty.style.display = "block";
+  if (errorAlert) errorAlert.style.display = "none";
+
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      if (errorAlert) {
+        errorAlert.textContent = data.error || "Invalid email or password.";
+        errorAlert.style.display = "block";
+      }
       return;
     }
 
-    if (empty) empty.style.display = "none";
-    list.innerHTML = "";
+    state.currentUser = data.data;
+    localStorage.setItem("autoroster_user", JSON.stringify(data.data));
+    showToast(`Signed in successfully as ${state.currentUser.name}`, "success");
+    showAppView();
+  } catch (err) {
+    showToast("Unable to connect to authentication server.", "error");
+    console.error(err);
+  }
+}
 
-    this.state.employees.forEach(emp => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.margin = "0";
-      card.style.padding = "0.85rem";
+/**
+ * Handle Logout
+ */
+function handleLogout() {
+  state.currentUser = null;
+  localStorage.removeItem("autoroster_user");
+  showLoginView();
+  showToast("You have been signed out.", "info");
+}
 
-      const skillsBadges = emp.skills.map(s => {
-        const cls = `badge-${s.toLowerCase()}`;
-        return `<span class="badge ${cls}">${s}</span>`;
-      }).join(" ");
+/**
+ * View Switches
+ */
+function showLoginView() {
+  document.getElementById("view-login").style.display = "flex";
+  document.getElementById("view-app").style.display = "none";
+}
 
-      card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">
-          <div>
-            <div style="font-weight:700; color:var(--slate-900); font-size:0.95rem;">${emp.name}</div>
-            <div style="font-size:0.75rem; color:var(--slate-500);">${emp.email || 'No email registered'}</div>
+function showAppView() {
+  document.getElementById("view-login").style.display = "none";
+  document.getElementById("view-app").style.display = "block";
+
+  // Update header profile badge
+  const avatar = document.getElementById("header-user-avatar");
+  const name = document.getElementById("header-user-name");
+  const role = document.getElementById("header-user-role");
+
+  if (name) name.textContent = state.currentUser.name;
+  if (role) {
+    role.textContent = state.currentUser.role.toUpperCase();
+    role.className = `user-role-badge ${state.currentUser.role === "admin" ? "badge-admin" : "badge-emp"}`;
+  }
+  if (avatar) {
+    const initials = state.currentUser.name.split(" ").map(p => p[0]).join("").slice(0, 2);
+    avatar.textContent = initials || "U";
+  }
+
+  // Switch to appropriate portal view
+  if (state.currentUser.role === "admin") {
+    document.getElementById("portal-admin").style.display = "block";
+    document.getElementById("portal-employee").style.display = "none";
+    initAdminPortal();
+  } else {
+    document.getElementById("portal-admin").style.display = "none";
+    document.getElementById("portal-employee").style.display = "block";
+    initEmployeePortal();
+  }
+}
+
+function switchAdminTab(targetId) {
+  document.querySelectorAll("#portal-admin .tab-btn").forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-admin-tab") === targetId);
+  });
+  document.querySelectorAll("#portal-admin .tab-panel").forEach(p => {
+    p.classList.toggle("active", p.id === targetId);
+  });
+  state.activeAdminTab = targetId;
+
+  // Refresh tab data
+  if (targetId === "tab-staff-directory") fetchStaff();
+  else if (targetId === "tab-leave-log") fetchLeaveLog();
+  else if (targetId === "tab-urgent-leaves") fetchUrgentLeaves();
+  else if (targetId === "tab-roster") fetchRoster();
+  else if (targetId === "tab-replacement-audit") fetchReplacementAudits();
+}
+
+function switchEmployeeTab(targetId) {
+  document.querySelectorAll("#portal-employee .tab-btn").forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-emp-tab") === targetId);
+  });
+  document.querySelectorAll("#portal-employee .tab-panel").forEach(p => {
+    p.classList.toggle("active", p.id === targetId);
+  });
+  state.activeEmpTab = targetId;
+
+  if (targetId === "tab-emp-roster") fetchEmployeePersonalRoster();
+}
+
+function toggleUrgentProofUpload(show) {
+  const uploadSec = document.getElementById("urgent-proof-upload-section");
+  if (uploadSec) uploadSec.style.display = show ? "block" : "none";
+}
+
+/**
+ * ========================================================
+ * ADMIN PORTAL LOGIC
+ * ========================================================
+ */
+async function initAdminPortal() {
+  await fetchStaff();
+  renderSkillChips();
+  fetchLeaveLog();
+  fetchUrgentLeaves();
+  fetchRoster();
+  fetchReplacementAudits();
+}
+
+/**
+ * Fetch and Render Staff Directory
+ */
+async function fetchStaff() {
+  try {
+    const res = await fetch("/api/employees");
+    const data = await res.json();
+    if (data.success) {
+      state.staff = data.data || [];
+      const badge = document.getElementById("badge-admin-staff-count");
+      if (badge) badge.textContent = state.staff.length;
+      renderStaffDirectory();
+    }
+  } catch (err) {
+    console.error("Error fetching staff:", err);
+  }
+}
+
+function renderStaffDirectory() {
+  const container = document.getElementById("staff-directory-grid");
+  if (!container) return;
+
+  if (state.staff.length === 0) {
+    container.innerHTML = `<p class="text-muted">No staff currently registered.</p>`;
+    return;
+  }
+
+  container.innerHTML = state.staff.map(emp => {
+    const skillBadges = (emp.skills || []).map(s => {
+      const cls = `badge-${s.toLowerCase()}`;
+      return `<span class="skill-badge ${cls}">${s}</span>`;
+    }).join(" ");
+
+    return `
+      <div class="staff-card">
+        <div>
+          <div class="staff-top">
+            <span class="staff-name">${escapeHtml(emp.name)}</span>
+            <span class="skill-badge badge-supervisor">Active</span>
           </div>
-          <button class="btn btn-outline-danger btn-sm" style="padding:0.2rem 0.45rem; font-size:0.7rem;" onclick="app.deleteEmployee('${emp.id}')">
-            Delete
+          <div class="staff-email">${escapeHtml(emp.email || "No email registered")}</div>
+          <div class="staff-skills-wrap">
+            ${skillBadges}
+          </div>
+        </div>
+        <div class="staff-footer">
+          <span class="staff-hours">⏱️ Max ${emp.max_weekly_hours}h / wk</span>
+          <button class="btn btn-outline-danger btn-sm" onclick="handleDeleteEmployee('${emp.id}')">
+            🗑 Delete
           </button>
         </div>
+      </div>
+    `;
+  }).join("");
+}
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.6rem;">
-          <div style="display:flex; flex-wrap:wrap; gap:0.25rem;">
-            ${skillsBadges}
-          </div>
-          <span class="badge" style="background:var(--slate-100); color:var(--slate-700); font-weight:700;">
-            ${emp.max_weekly_hours}h/wk
-          </span>
+function renderSkillChips() {
+  const container = document.getElementById("admin-skill-chips-container");
+  if (!container) return;
+  container.innerHTML = state.availableSkills.map(skill => `
+    <span class="skill-chip" data-skill="${skill}" onclick="toggleSkillSelection(this)">
+      ${skill}
+    </span>
+  `).join("");
+}
+
+function toggleSkillSelection(elem) {
+  elem.classList.toggle("selected");
+}
+
+async function handleAdminAddEmployee(e) {
+  e.preventDefault();
+  const name = document.getElementById("add-emp-name").value.trim();
+  const email = document.getElementById("add-emp-email").value.trim();
+  const hours = parseInt(document.getElementById("add-emp-hours").value, 10);
+  const selectedSkills = Array.from(document.querySelectorAll("#admin-skill-chips-container .skill-chip.selected"))
+                              .map(c => c.getAttribute("data-skill"));
+
+  const errorAlert = document.getElementById("add-emp-error");
+  if (errorAlert) errorAlert.style.display = "none";
+
+  if (!name) {
+    showToast("Please enter employee name.", "error");
+    return;
+  }
+  if (selectedSkills.length === 0) {
+    showToast("Please select at least one skill.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/employees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, max_weekly_hours: hours, skills: selectedSkills })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      if (errorAlert) {
+        errorAlert.textContent = data.error || "Failed to register employee.";
+        errorAlert.style.display = "block";
+      }
+      return;
+    }
+
+    showToast(`Employee ${name} registered successfully!`, "success");
+    document.getElementById("form-admin-add-employee").reset();
+    document.querySelectorAll("#admin-skill-chips-container .skill-chip").forEach(c => c.classList.remove("selected"));
+    await fetchStaff();
+    switchAdminTab("tab-staff-directory");
+  } catch (err) {
+    showToast("Error adding employee.", "error");
+  }
+}
+
+async function handleDeleteEmployee(empId) {
+  const emp = state.staff.find(e => e.id === empId);
+  const empName = emp ? emp.name : "employee";
+  if (!confirm(`Are you sure you want to remove ${empName} from the team?`)) return;
+
+  try {
+    const res = await fetch(`/api/employees/${empId}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`Removed ${empName}.`, "info");
+      await fetchStaff();
+    } else {
+      showToast(data.error || "Failed to delete employee", "error");
+    }
+  } catch (err) {
+    showToast("Error deleting employee.", "error");
+  }
+}
+
+/**
+ * Fetch and Render Leave Decision Log
+ */
+async function fetchLeaveLog() {
+  try {
+    const res = await fetch("/api/admin/leave-log");
+    const data = await res.json();
+    if (data.success) {
+      state.leavesLog = data.data || [];
+      const badge = document.getElementById("badge-admin-log-count");
+      if (badge) badge.textContent = state.leavesLog.length;
+      renderLeaveLog();
+    }
+  } catch (err) {
+    console.error("Error fetching leave log:", err);
+  }
+}
+
+function renderLeaveLog() {
+  const tbody = document.getElementById("leave-log-tbody");
+  if (!tbody) return;
+
+  let filtered = state.leavesLog;
+  if (state.activeLogFilter !== "ALL") {
+    filtered = filtered.filter(l => l.status === state.activeLogFilter);
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No leave requests match filter "${state.activeLogFilter}".</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(l => {
+    const statusCls = `status-${l.status.toLowerCase()}`;
+    const riskPct = Math.round((l.exploitation_risk_score || 0) * 100);
+    const riskBadgeCls = riskPct >= 50 ? "badge-cook" : (riskPct >= 25 ? "badge-barista" : "badge-cashier");
+
+    return `
+      <tr style="cursor: pointer;" onclick="openLeaveDetailModal('${l.id}')" title="Click to view full message and AI pattern breakdown">
+        <td><span class="status-pill ${statusCls}">${l.status}</span></td>
+        <td><strong>${escapeHtml(l.created_at || "Recent")}</strong></td>
+        <td><strong>${escapeHtml(l.employee_name)}</strong></td>
+        <td>${escapeHtml(l.day_of_week)} (${escapeHtml(l.shift_type)})</td>
+        <td>${escapeHtml(l.reason || "-")}</td>
+        <td><span class="skill-badge badge-server">${escapeHtml(l.reason_importance || "MEDIUM")}</span></td>
+        <td><span class="skill-badge ${riskBadgeCls}">${riskPct}% Risk</span></td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openLeaveDetailModal('${l.id}')">
+            🔍 Inspect Message
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openLeaveDetailModal(leaveId) {
+  const leave = state.leavesLog.find(l => l.id === leaveId);
+  if (!leave) return;
+
+  const modalBody = document.getElementById("modal-leave-detail-body");
+  if (!modalBody) return;
+
+  modalBody.innerHTML = `
+    <div style="margin-bottom: 1.25rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <h4 style="font-size:1.1rem; font-weight:800; color:var(--slate-900);">${escapeHtml(leave.employee_name)}</h4>
+        <span class="status-pill status-${leave.status.toLowerCase()}">${leave.status}</span>
+      </div>
+      <p style="font-size:0.8rem; color:var(--slate-500);">Submitted on: ${escapeHtml(leave.created_at || "Recent")} • Target: ${leave.day_of_week} ${leave.shift_type}</p>
+    </div>
+
+    <div style="background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:1rem; margin-bottom:1.25rem;">
+      <h5 style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--slate-500); margin-bottom:0.4rem;">Original Message Sent by Employee:</h5>
+      <p style="font-size:0.92rem; font-style:italic; color:var(--slate-800); line-height:1.6;">"${escapeHtml(leave.raw_text)}"</p>
+    </div>
+
+    <div class="ai-metrics-grid" style="margin-bottom:1.25rem;">
+      <div class="ai-metric-item">
+        <span class="metric-label">Extracted Reason</span>
+        <span class="metric-value" style="font-size:0.85rem;">${escapeHtml(leave.reason)}</span>
+      </div>
+      <div class="ai-metric-item">
+        <span class="metric-label">Reason Importance</span>
+        <span class="metric-value">${escapeHtml(leave.reason_importance || "MEDIUM")}</span>
+      </div>
+      <div class="ai-metric-item">
+        <span class="metric-label">Exploitation Risk</span>
+        <span class="metric-value">${Math.round((leave.exploitation_risk_score || 0) * 100)}%</span>
+      </div>
+      <div class="ai-metric-item">
+        <span class="metric-label">AI Recommendation</span>
+        <span class="metric-value">${escapeHtml(leave.ai_decision || leave.status)}</span>
+      </div>
+    </div>
+
+    <div class="ai-analysis-box" style="margin-bottom:1.25rem;">
+      <h4>Pattern Learning & Anti-Exploitation Diagnostics:</h4>
+      <p>${escapeHtml(leave.pattern_analysis || leave.explanation || "Pattern verified clean.")}</p>
+    </div>
+
+    ${leave.is_urgent && leave.proof_filename ? `
+      <div style="background:#fffbeb; border:1px solid #fed7aa; border-radius:8px; padding:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:700; color:#c2410c; text-transform:uppercase;">Attached Medical Proof:</span>
+          <div style="font-weight:700; color:#9a3412;">📄 ${escapeHtml(leave.proof_filename)}</div>
         </div>
-      `;
-      list.appendChild(card);
-    });
-  },
+        <button class="btn btn-secondary btn-sm" onclick="openProofModal('${leave.id}')">View Certificate</button>
+      </div>
+    ` : ""}
+  `;
 
-  async handleAddEmployee(e) {
-    e.preventDefault();
-    const errorBox = document.getElementById("staff-form-error");
-    errorBox.style.display = "none";
+  openModal("modal-leave-detail");
+}
 
-    const name = document.getElementById("emp-name").value.trim();
-    const max_hours = parseInt(document.getElementById("emp-hours").value, 10);
-    const email = document.getElementById("emp-email").value.trim();
-    const phone = document.getElementById("emp-phone").value.trim();
-
-    const selectedSkills = Array.from(document.querySelectorAll("input[name='skills']:checked")).map(cb => cb.value);
-
-    // Form validation
-    if (!name) {
-      errorBox.textContent = "Please enter the employee's full name.";
-      errorBox.style.display = "block";
-      return;
-    }
-    if (selectedSkills.length === 0) {
-      errorBox.textContent = "Please select at least one qualified skill for this employee.";
-      errorBox.style.display = "block";
-      return;
-    }
-
-    const submitBtn = document.getElementById("btn-submit-employee");
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<span class="spinner"></span> <span>Adding...</span>`;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/employees`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({
-          name,
-          skills: selectedSkills,
-          max_weekly_hours: max_hours,
-          email,
-          phone
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.showToast(`Added ${name} to team!`, "success");
-      // Reset form
-      document.getElementById("emp-name").value = "";
-      document.getElementById("emp-email").value = "";
-      document.getElementById("emp-phone").value = "";
-      document.querySelectorAll("input[name='skills']:checked").forEach(cb => cb.checked = false);
-
-      await this.loadEmployees();
-    } catch (err) {
-      errorBox.textContent = err.message;
-      errorBox.style.display = "block";
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = `<span>Add Employee</span>`;
-    }
-  },
-
-  async deleteEmployee(empId) {
-    if (!confirm("Are you sure you want to remove this employee?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/employees/${empId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      this.showToast("Employee removed.", "info");
-      await this.loadEmployees();
-    } catch (err) {
-      this.showToast(err.message, "error");
-    }
-  },
-
-  async resetSeedData() {
-    try {
-      const res = await fetch(`${API_BASE}/api/employees/reset`, { method: "POST" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      this.showToast("Restored pristine seed data!", "success");
-      await this.loadEmployees();
-      await this.loadLeaves();
-      await this.loadRoster();
-    } catch (err) {
-      this.showToast(`Error resetting: ${err.message}`, "error");
-    }
-  },
-
-  // ==========================================
-  // SCREEN 2: AI LEAVE & AVAILABILITY
-  // ==========================================
-  populateEmployeeDropdown() {
-    const select = document.getElementById("leave-emp-select");
-    if (!select) return;
-    select.innerHTML = "";
-    this.state.employees.forEach(emp => {
-      const opt = document.createElement("option");
-      opt.value = emp.id;
-      opt.textContent = `${emp.name} (${emp.skills.join(", ")})`;
-      select.appendChild(opt);
-    });
-  },
-
-  async loadLeaves() {
-    try {
-      const res = await fetch(`${API_BASE}/api/leaves`);
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.state.leaveRequests = data.data;
-      if (data.sample_messages) {
-        this.state.sampleMessages = data.sample_messages;
-        this.renderPresetMessages();
+/**
+ * Fetch and Render Urgent Leaves
+ */
+async function fetchUrgentLeaves() {
+  try {
+    const res = await fetch("/api/admin/urgent-leaves");
+    const data = await res.json();
+    if (data.success) {
+      state.urgentLeaves = data.data || [];
+      const badge = document.getElementById("badge-admin-urgent-count");
+      if (badge) {
+        const pendingCount = state.urgentLeaves.filter(u => u.status === "PENDING").length;
+        badge.textContent = `${pendingCount} Urgent`;
       }
-
-      // Update badge
-      const pendingCount = this.state.leaveRequests.filter(l => l.status === "PENDING").length;
-      document.getElementById("badge-leave-count").textContent = pendingCount || this.state.leaveRequests.length;
-
-      this.renderLeavesList();
-    } catch (err) {
-      this.showToast(`Failed to load requests: ${err.message}`, "error");
+      renderUrgentLeaves();
     }
-  },
+  } catch (err) {
+    console.error("Error fetching urgent leaves:", err);
+  }
+}
 
-  renderPresetMessages() {
-    const container = document.getElementById("preset-messages-container");
-    if (!container) return;
-    container.innerHTML = "";
+function renderUrgentLeaves() {
+  const container = document.getElementById("urgent-leaves-container");
+  if (!container) return;
 
-    this.state.sampleMessages.forEach(msg => {
-      const chip = document.createElement("div");
-      chip.className = "preset-chip";
-      chip.innerHTML = `
-        <div class="preset-author">${msg.employee_name}</div>
-        <div style="color:var(--slate-700); font-style:italic;">"${msg.text}"</div>
-      `;
-      chip.addEventListener("click", () => {
-        // Set employee in dropdown
-        const empSelect = document.getElementById("leave-emp-select");
-        if (empSelect) empSelect.value = msg.employee_id;
-        // Set text
-        const textarea = document.getElementById("raw-message-text");
-        if (textarea) textarea.value = msg.text;
-        // Auto trigger parse for snappy demo experience
-        this.handleParseMessage();
-      });
-      container.appendChild(chip);
-    });
-  },
+  if (state.urgentLeaves.length === 0) {
+    container.innerHTML = `<p class="text-muted">No urgent medical leaves submitted.</p>`;
+    return;
+  }
 
-  async handleParseMessage() {
-    const text = document.getElementById("raw-message-text").value.trim();
-    if (!text) {
-      this.showToast("Please enter an employee message to parse.", "error");
-      return;
-    }
-
-    const parseBtn = document.getElementById("btn-parse-ai");
-    parseBtn.disabled = true;
-    parseBtn.innerHTML = `<span class="spinner"></span> <span>AI Parsing...</span>`;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/leaves/parse`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({ text })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      const parsed = data.data;
-      this.state.lastParsedLeave = parsed;
-
-      // If AI detected employee name in text, sync the dropdown
-      if (parsed.detected_employee_id) {
-        const empSelect = document.getElementById("leave-emp-select");
-        if (empSelect) empSelect.value = parsed.detected_employee_id;
-      }
-
-      // Display Preview Card
-      const preview = document.getElementById("ai-parse-result");
-      preview.style.display = "block";
-      document.getElementById("parse-day").textContent = parsed.day_of_week;
-      document.getElementById("parse-shift").textContent = parsed.shift_type;
-      document.getElementById("parse-reason").textContent = parsed.reason;
-      document.getElementById("parse-confidence").textContent = `${Math.round(parsed.confidence * 100)}% Confident`;
-      document.getElementById("parse-explanation").textContent = parsed.explanation;
-
-      this.showToast("AI parsed structured request!", "success");
-    } catch (err) {
-      this.showToast(`AI Parsing error: ${err.message}`, "error");
-    } finally {
-      parseBtn.disabled = false;
-      parseBtn.innerHTML = `<span>Parse with AI</span>`;
-    }
-  },
-
-  async handleSubmitParsedLeave() {
-    if (!this.state.lastParsedLeave) return;
-
-    const empSelect = document.getElementById("leave-emp-select");
-    const empId = empSelect.value;
-    const rawText = document.getElementById("raw-message-text").value.trim();
-
-    try {
-      const res = await fetch(`${API_BASE}/api/leaves`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({
-          employee_id: empId,
-          raw_text: rawText,
-          day_of_week: this.state.lastParsedLeave.day_of_week,
-          shift_type: this.state.lastParsedLeave.shift_type,
-          reason: this.state.lastParsedLeave.reason,
-          confidence: this.state.lastParsedLeave.confidence,
-          explanation: this.state.lastParsedLeave.explanation
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.showToast("Leave request added to manager queue!", "success");
-      // Hide parse preview & clear textarea
-      document.getElementById("ai-parse-result").style.display = "none";
-      document.getElementById("raw-message-text").value = "";
-      this.state.lastParsedLeave = null;
-
-      await this.loadLeaves();
-    } catch (err) {
-      this.showToast(err.message, "error");
-    }
-  },
-
-  async updateLeaveStatus(leaveId, newStatus) {
-    try {
-      const res = await fetch(`${API_BASE}/api/leaves/${leaveId}/status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({ status: newStatus })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.showToast(`Request marked ${newStatus.toLowerCase()}!`, "success");
-      await this.loadLeaves();
-      // If we already had a roster generated, remind user to re-solve
-      if (this.state.currentRoster && this.state.currentRoster.length > 0) {
-        document.getElementById("badge-roster-status").textContent = "Re-solve needed";
-      }
-    } catch (err) {
-      this.showToast(err.message, "error");
-    }
-  },
-
-  renderLeavesList() {
-    const list = document.getElementById("leave-list");
-    const empty = document.getElementById("leave-empty");
-    if (!list) return;
-
-    let items = this.state.leaveRequests;
-    if (this.state.leaveFilter !== "ALL") {
-      items = items.filter(l => l.status === this.state.leaveFilter);
-    }
-
-    if (items.length === 0) {
-      list.innerHTML = "";
-      if (empty) empty.style.display = "block";
-      return;
-    }
-
-    if (empty) empty.style.display = "none";
-    list.innerHTML = "";
-
-    items.forEach(item => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.margin = "0 0 0.75rem 0";
-      card.style.padding = "0.85rem";
-
-      const statusBadge = item.status === "APPROVED"
-        ? `<span class="badge badge-approved">Approved</span>`
-        : item.status === "REJECTED"
-        ? `<span class="badge badge-rejected">Rejected</span>`
-        : `<span class="badge badge-pending">Pending Review</span>`;
-
-      card.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem;">
+  container.innerHTML = state.urgentLeaves.map(u => {
+    const isPending = u.status === "PENDING";
+    return `
+      <div class="urgent-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">
           <div>
-            <div style="font-weight:700; color:var(--slate-900); font-size:0.95rem;">${item.employee_name}</div>
-            <div style="font-size:0.75rem; color:var(--slate-500);">${item.created_at}</div>
+            <span class="urgent-badge">🚨 Urgent Medical</span>
+            <h3 style="font-size:1.1rem; font-weight:800; margin-top:0.35rem;">${escapeHtml(u.employee_name)}</h3>
           </div>
-          <div>${statusBadge}</div>
+          <span class="status-pill status-${u.status.toLowerCase()}">${u.status}</span>
         </div>
 
-        <div style="font-size:0.85rem; margin-bottom:0.4rem;">
-          <span style="font-weight:600; color:var(--primary);">${item.day_of_week} • ${item.shift_type}</span>
-          <span style="color:var(--slate-600); margin-left:0.35rem;">(${item.reason})</span>
-        </div>
+        <p style="font-size:0.8rem; color:var(--slate-500); margin-bottom:0.75rem;">
+          📅 Requested: <strong>${escapeHtml(u.day_of_week)} (${escapeHtml(u.shift_type)})</strong>
+        </p>
 
-        <div style="font-size:0.8rem; background:var(--slate-50); padding:0.4rem 0.6rem; border-radius:4px; font-style:italic; color:var(--slate-700); margin-bottom:0.6rem; border:1px solid var(--slate-200);">
-          "${item.raw_text}"
-        </div>
+        <p style="font-size:0.85rem; color:var(--slate-800); margin-bottom:0.75rem; line-height:1.5;">
+          💬 "${escapeHtml(u.raw_text)}"
+        </p>
 
-        ${item.status === "PENDING" ? `
-          <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
-            <button class="btn btn-danger btn-sm" onclick="app.updateLeaveStatus('${item.id}', 'REJECTED')">
-              Reject
-            </button>
-            <button class="btn btn-success btn-sm" onclick="app.updateLeaveStatus('${item.id}', 'APPROVED')">
-              Approve
-            </button>
-          </div>
-        ` : ''}
-      `;
-      list.appendChild(card);
-    });
-  },
-
-  // ==========================================
-  // SCREEN 3: WEEKLY ROSTER & SOLVER
-  // ==========================================
-  async loadRoster() {
-    try {
-      const res = await fetch(`${API_BASE}/api/roster`);
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      const rosterData = data.data;
-      if (rosterData.status === "SUCCESS") {
-        this.state.currentRoster = rosterData.slots;
-        this.state.rosterStats = rosterData.stats;
-        this.renderRosterSuccess(rosterData);
-      } else if (rosterData.status === "INFEASIBLE") {
-        this.renderRosterConflict(rosterData);
-      } else {
-        // Not generated yet
-        document.getElementById("roster-empty").style.display = "block";
-        document.getElementById("roster-calendar-wrapper").style.display = "none";
-        document.getElementById("roster-success-banner").style.display = "none";
-        document.getElementById("roster-conflict-banner").style.display = "none";
-      }
-    } catch (err) {
-      this.showToast(`Unable to load roster: ${err.message}`, "error");
-    }
-  },
-
-  async generateRoster() {
-    const btn = document.getElementById("btn-generate-roster");
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span> <span>Solving CSP Constraints...</span>`;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/roster/generate`, { method: "POST" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      const rosterData = data.data;
-      if (rosterData.status === "SUCCESS") {
-        this.state.currentRoster = rosterData.slots;
-        this.state.rosterStats = rosterData.stats;
-        this.renderRosterSuccess(rosterData);
-        this.showToast("Roster generated with zero constraint violations!", "success");
-        document.getElementById("badge-roster-status").textContent = "Solved";
-      } else {
-        this.state.currentRoster = [];
-        this.renderRosterConflict(rosterData);
-        this.showToast("No feasible schedule found (conflict detected).", "error");
-        document.getElementById("badge-roster-status").textContent = "Conflict";
-      }
-
-      this.populateAbsenceSlotPicker();
-    } catch (err) {
-      this.showToast(err.message, "error");
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = `<span>✨ Generate Weekly Roster</span>`;
-    }
-  },
-
-  async triggerImpossibleScenario() {
-    const btn = document.getElementById("btn-trigger-impossible");
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span> <span>Injecting Conflict...</span>`;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/roster/load-impossible`, { method: "POST" });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.showToast("Injected impossible scenario (All Supervisors on leave Friday morning)", "info");
-      await this.loadLeaves();
-      this.renderRosterConflict(data.data);
-      document.getElementById("badge-roster-status").textContent = "Conflict";
-    } catch (err) {
-      this.showToast(err.message, "error");
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = `<span>⚠️ Trigger Impossible Scenario</span>`;
-    }
-  },
-
-  renderRosterSuccess(rosterData) {
-    document.getElementById("roster-empty").style.display = "none";
-    document.getElementById("roster-conflict-banner").style.display = "none";
-    document.getElementById("roster-success-banner").style.display = "flex";
-    document.getElementById("roster-calendar-wrapper").style.display = "block";
-
-    // Staff breakdown meter
-    const breakdown = document.getElementById("roster-hours-breakdown");
-    breakdown.innerHTML = "";
-    if (rosterData.stats && rosterData.stats.employee_hours) {
-      Object.entries(rosterData.stats.employee_hours).forEach(([eid, stat]) => {
-        const pill = document.createElement("div");
-        pill.className = "badge";
-        const isNearCap = stat.hours_worked >= stat.max_hours;
-        pill.style.background = isNearCap ? "#fef3c7" : "#e0e7ff";
-        pill.style.color = isNearCap ? "#b45309" : "#3730a3";
-        pill.innerHTML = `<strong>${stat.name}:</strong> ${stat.hours_worked}/${stat.max_hours}h (${stat.utilization_pct}%)`;
-        breakdown.appendChild(pill);
-      });
-    }
-
-    // Clear calendar grid cells
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    const shifts = ["Morning", "Evening"];
-    days.forEach(d => {
-      shifts.forEach(s => {
-        const cell = document.getElementById(`cell-${d}-${s}`);
-        if (cell) cell.innerHTML = "";
-      });
-    });
-
-    // Populate slots into calendar grid
-    rosterData.slots.forEach(slot => {
-      const cell = document.getElementById(`cell-${slot.day_of_week}-${slot.shift_type}`);
-      if (!cell) return;
-
-      const slotEl = document.createElement("div");
-      slotEl.className = `slot-card ${slot.is_absent ? (slot.replaced_by_id ? 'replaced' : 'absent') : ''}`;
-
-      const roleBadge = `<span class="badge badge-${slot.role.toLowerCase()}">${slot.role}</span>`;
-
-      let statusDisplay = "";
-      if (slot.is_absent) {
-        if (slot.replaced_by_id) {
-          statusDisplay = `
+        <div class="urgent-proof-attachment">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <span style="font-size:1.4rem;">📄</span>
             <div>
-              <div style="font-size:0.75rem; text-decoration:line-through; color:var(--slate-500);">${slot.assigned_employee_name}</div>
-              <div class="slot-replacement-badge">✓ Replaced by ${slot.replaced_by_name}</div>
+              <div style="font-size:0.8rem; font-weight:700;">${escapeHtml(u.proof_filename || "Medical_Certificate.pdf")}</div>
+              <div style="font-size:0.7rem; color:var(--slate-500);">Verified Document Attachment</div>
             </div>
-          `;
-        } else {
-          statusDisplay = `
-            <div>
-              <div style="font-size:0.75rem; text-decoration:line-through; color:#b91c1c;">${slot.assigned_employee_name}</div>
-              <div class="slot-absent-badge">🚨 Absent (${slot.absent_reason || 'Call-out'})</div>
-            </div>
-          `;
-        }
-      } else {
-        statusDisplay = `<span class="slot-emp-name">${slot.assigned_employee_name}</span>`;
-      }
-
-      slotEl.innerHTML = `
-        <div class="slot-header">
-          ${roleBadge}
-          <span style="font-size:0.7rem; color:var(--slate-500);">${slot.hours}h</span>
-        </div>
-        <div style="margin-bottom:0.4rem;">
-          ${statusDisplay}
-        </div>
-        <button class="btn btn-outline-danger btn-sm" style="width:100%; padding:0.2rem 0.4rem; font-size:0.72rem;" onclick="app.quickMarkAbsent('${slot.id}')">
-          ${slot.is_absent ? 'Manage Coverage' : 'Mark Absent'}
-        </button>
-      `;
-      cell.appendChild(slotEl);
-    });
-
-    this.populateAbsenceSlotPicker();
-  },
-
-  renderRosterConflict(rosterData) {
-    document.getElementById("roster-empty").style.display = "none";
-    document.getElementById("roster-success-banner").style.display = "none";
-    document.getElementById("roster-conflict-banner").style.display = "flex";
-    document.getElementById("roster-calendar-wrapper").style.display = "none";
-
-    const container = document.getElementById("conflict-details-container");
-    container.innerHTML = "";
-
-    const conflicts = rosterData.conflicts || [];
-    if (conflicts.length > 0) {
-      document.getElementById("conflict-main-title").textContent = conflicts[0].title || "No Feasible Schedule Found";
-      document.getElementById("conflict-main-desc").textContent = conflicts[0].description || "Hard constraint violations prevent schedule generation.";
-
-      conflicts.forEach(c => {
-        const item = document.createElement("div");
-        item.style.marginBottom = "0.6rem";
-        item.style.paddingBottom = "0.6rem";
-        item.style.borderBottom = "1px solid #fee2e2";
-
-        const factorList = (c.factors || []).map(f => `<li>${f}</li>`).join("");
-
-        item.innerHTML = `
-          <div style="font-weight:700; color:#991b1b; margin-bottom:0.2rem;">${c.title}</div>
-          <div style="margin-bottom:0.35rem;">${c.description}</div>
-          ${factorList ? `<ul style="padding-left:1.25rem; margin-bottom:0.35rem; color:var(--slate-700);">${factorList}</ul>` : ''}
-          <div style="color:#065f46; background:#ecfdf5; padding:0.35rem 0.55rem; border-radius:4px; font-weight:600;">
-            💡 Recommended Action: ${c.action || 'Adjust requirements or staff hours.'}
           </div>
+          <button class="btn btn-secondary btn-sm" onclick="openProofModal('${u.id}')">Inspect</button>
+        </div>
+
+        ${isPending ? `
+          <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+            <button class="btn btn-success btn-sm btn-block" onclick="handleUrgentAction('${u.id}', 'APPROVE')">
+              ✓ Approve Urgent Leave
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="handleUrgentAction('${u.id}', 'REJECT')">
+              ✕ Reject
+            </button>
+          </div>
+        ` : `
+          <div style="font-size:0.75rem; color:var(--slate-500); text-align:center; padding-top:0.5rem;">
+            Decision recorded as: <strong>${u.status}</strong>
+          </div>
+        `}
+      </div>
+    `;
+  }).join("");
+}
+
+async function handleUrgentAction(leaveId, action) {
+  try {
+    const res = await fetch(`/api/admin/urgent-leaves/${leaveId}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, action === "APPROVE" ? "success" : "info");
+      await fetchUrgentLeaves();
+      await fetchLeaveLog();
+    } else {
+      showToast(data.error || "Action failed", "error");
+    }
+  } catch (err) {
+    showToast("Error processing urgent action.", "error");
+  }
+}
+
+function openProofModal(leaveId) {
+  const leave = state.urgentLeaves.find(u => u.id === leaveId) || state.leavesLog.find(l => l.id === leaveId);
+  const modalBody = document.getElementById("modal-proof-body");
+  if (!modalBody || !leave) return;
+
+  modalBody.innerHTML = `
+    <div style="border:2px solid #fed7aa; background:#fffbf5; border-radius:10px; padding:1.5rem; margin-bottom:1.25rem;">
+      <div style="display:flex; justify-content:space-between; border-bottom:1px solid #fed7aa; padding-bottom:0.75rem; margin-bottom:1rem;">
+        <div>
+          <h4 style="font-weight:800; color:#9a3412; font-size:1.1rem;">Clinical Medical Certificate</h4>
+          <span style="font-size:0.75rem; color:#b45309;">Verified Emergency Department Document</span>
+        </div>
+        <span style="font-size:1.5rem;">🏥</span>
+      </div>
+
+      <div style="font-size:0.85rem; line-height:1.6; color:#431407;">
+        <p><strong>Patient Name:</strong> ${escapeHtml(leave.employee_name)}</p>
+        <p><strong>Medical Diagnosis:</strong> Acute Emergency Assessment - ${escapeHtml(leave.reason)}</p>
+        <p><strong>Work Restriction:</strong> Unfit for all physical duties on ${escapeHtml(leave.day_of_week)}</p>
+        <p><strong>Document Reference:</strong> ${escapeHtml(leave.proof_filename || "Hospital_Clinical_Record.pdf")}</p>
+      </div>
+
+      <div style="margin-top:1.25rem; padding-top:0.75rem; border-top:1px dashed #fed7aa; display:flex; justify-content:space-between; font-size:0.72rem; color:#9a3412;">
+        <span>Physician Signature: Dr. M. Vance, MD</span>
+        <span>Stamp: St. Mary Medical Center</span>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeModal('modal-proof-preview')">Close Preview</button>
+    </div>
+  `;
+
+  openModal("modal-proof-preview");
+}
+
+/**
+ * Fetch and Render Master Roster (CP-SAT)
+ */
+async function fetchRoster() {
+  try {
+    const res = await fetch("/api/roster");
+    const data = await res.json();
+    if (data.success) {
+      state.roster = data.data.slots || [];
+      state.rosterStatus = data.data.status;
+      renderMasterRoster(data.data);
+    }
+  } catch (err) {
+    console.error("Error fetching roster:", err);
+  }
+}
+
+function renderMasterRoster(rosterData) {
+  const container = document.getElementById("admin-roster-grid");
+  const conflictBox = document.getElementById("conflict-panel");
+  const statusBadge = document.getElementById("badge-roster-status");
+
+  if (statusBadge) {
+    statusBadge.textContent = rosterData.status === "SUCCESS" ? "CP-SAT Solved" : (rosterData.status === "INFEASIBLE" ? "Conflicts Detected" : "Ready");
+    statusBadge.className = `tab-badge ${rosterData.status === "SUCCESS" ? "badge-supervisor" : (rosterData.status === "INFEASIBLE" ? "badge-warning" : "")}`;
+  }
+
+  // Conflict box
+  if (rosterData.status === "INFEASIBLE" && rosterData.conflicts && rosterData.conflicts.length > 0) {
+    conflictBox.style.display = "block";
+    conflictBox.innerHTML = `
+      <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:1rem; color:#991b1b;">
+        <h4 style="font-weight:800; font-size:1rem; margin-bottom:0.4rem;">⚠️ No Feasible Schedule Found (Hard-Constraint Conflict)</h4>
+        <p style="font-size:0.85rem; margin-bottom:0.75rem;">Google OR-Tools CP-SAT proved that all required shifts cannot be satisfied under existing rules:</p>
+        ${rosterData.conflicts.map(c => `
+          <div style="background:white; border-left:3px solid #ef4444; padding:0.6rem 0.85rem; margin-bottom:0.5rem; border-radius:0 6px 6px 0;">
+            <strong>${escapeHtml(c.title)}:</strong> ${escapeHtml(c.description)}
+            <div style="font-size:0.75rem; color:#b91c1c; margin-top:0.25rem;">Suggested Action: ${escapeHtml(c.action)}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    conflictBox.style.display = "none";
+  }
+
+  if (!container) return;
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  container.innerHTML = days.map(day => {
+    const daySlots = state.roster.filter(s => s.day_of_week === day);
+    return `
+      <div class="day-column">
+        <div class="day-col-header">
+          <div class="day-col-title">${day}</div>
+          <div style="font-size:0.7rem; color:var(--slate-500);">${daySlots.length} shifts</div>
+        </div>
+        <div class="day-shifts-container">
+          ${daySlots.map(slot => {
+            const isReplaced = !!slot.replaced_by_id;
+            const assigneeName = slot.replaced_by_name || slot.assigned_employee_name || "Unassigned";
+            const roleClass = `badge-${slot.role.toLowerCase()}`;
+
+            return `
+              <div class="slot-card ${isReplaced ? "slot-replaced" : ""}">
+                <div class="slot-top">
+                  <span class="slot-shift-type">${slot.shift_type} (8h)</span>
+                  <span class="skill-badge ${roleClass}">${slot.role}</span>
+                </div>
+                <div class="slot-assignee">
+                  ${escapeHtml(assigneeName)}
+                </div>
+                ${isReplaced ? `
+                  <span class="slot-replaced-badge">↺ Sub for ${escapeHtml(slot.assigned_employee_name)}</span>
+                ` : ""}
+                ${!slot.is_absent ? `
+                  <button class="btn-absent-trigger" onclick="handleMarkAbsent('${slot.id}')">
+                    Mark Absent
+                  </button>
+                ` : `
+                  <span style="font-size:0.68rem; color:#b91c1c; font-weight:700;">Absent Reported</span>
+                `}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function handleGenerateRoster() {
+  try {
+    showToast("Running Google OR-Tools CP-SAT solver...", "info");
+    const res = await fetch("/api/roster/generate", { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      state.roster = data.data.slots || [];
+      state.rosterStatus = data.data.status;
+      renderMasterRoster(data.data);
+      if (data.data.status === "SUCCESS") {
+        showToast("Weekly roster generated successfully!", "success");
+      } else {
+        showToast("Infeasible constraints detected.", "error");
+      }
+    }
+  } catch (err) {
+    showToast("Error generating roster.", "error");
+  }
+}
+
+async function handleLoadImpossible() {
+  try {
+    showToast("Injecting conflict scenario...", "info");
+    const res = await fetch("/api/roster/load-impossible", { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      renderMasterRoster(data.data);
+      showToast("Impossible scenario active: All Supervisors on leave for Friday Morning.", "error");
+    }
+  } catch (err) {
+    showToast("Error triggering impossible scenario.", "error");
+  }
+}
+
+/**
+ * Handle Marking Absent & Replacement Selection
+ */
+async function handleMarkAbsent(slotId) {
+  try {
+    const res = await fetch("/api/roster/mark-absent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot_id: slotId, reason: "Sudden absence / call-out" })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.error || "Failed to mark absent", "error");
+      return;
+    }
+
+    // Open ranked replacements modal
+    await openReplacementModal(slotId);
+  } catch (err) {
+    showToast("Error marking shift absent.", "error");
+  }
+}
+
+async function openReplacementModal(slotId) {
+  try {
+    const res = await fetch(`/api/roster/replacements?slot_id=${slotId}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.error || "Failed to fetch replacements", "error");
+      return;
+    }
+
+    const replData = data.data;
+    const targetSlot = replData.slot;
+    const targetInfo = document.getElementById("replacement-target-info");
+    const candidatesContainer = document.getElementById("replacement-candidates-container");
+
+    if (targetInfo) {
+      targetInfo.innerHTML = `
+        <div style="background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <span style="font-size:0.75rem; font-weight:700; color:var(--slate-500); text-transform:uppercase;">Vacant Shift</span>
+            <div style="font-size:1.1rem; font-weight:800; color:var(--slate-900);">${targetSlot.day_of_week} ${targetSlot.shift_type} (${targetSlot.hours}h)</div>
+          </div>
+          <div>
+            <span class="skill-badge badge-${targetSlot.role.toLowerCase()}">${targetSlot.role} Required</span>
+          </div>
+        </div>
+      `;
+    }
+
+    if (candidatesContainer) {
+      if (replData.eligible_count === 0) {
+        candidatesContainer.innerHTML = `
+          <div class="alert alert-danger">No eligible replacements have the required skill and available capacity.</div>
         `;
-        container.appendChild(item);
-      });
-    } else {
-      container.innerHTML = `<div>No valid schedule found satisfying all 5 hard constraints.</div>`;
-    }
-  },
-
-  // ==========================================
-  // SCREEN 4: ABSENCE & RANKED REPLACEMENTS
-  // ==========================================
-  populateAbsenceSlotPicker() {
-    const select = document.getElementById("absence-slot-picker");
-    if (!select) return;
-    select.innerHTML = "";
-
-    if (!this.state.currentRoster || this.state.currentRoster.length === 0) {
-      select.innerHTML = `<option value="">(Generate a roster first in Screen 3)</option>`;
-      return;
-    }
-
-    this.state.currentRoster.forEach(slot => {
-      const opt = document.createElement("option");
-      opt.value = slot.id;
-      const status = slot.is_absent ? (slot.replaced_by_id ? `[Replaced by ${slot.replaced_by_name}]` : `[ABSENT]`) : '';
-      opt.textContent = `${slot.day_of_week} ${slot.shift_type} — ${slot.role} (${slot.assigned_employee_name}) ${status}`;
-      select.appendChild(opt);
-    });
-  },
-
-  quickMarkAbsent(slotId) {
-    // Jump straight from Calendar to Screen 4 with this slot pre-selected
-    this.switchTab("tab-replacement");
-    const select = document.getElementById("absence-slot-picker");
-    if (select) {
-      select.value = slotId;
-    }
-    this.handleMarkAbsent();
-  },
-
-  async handleMarkAbsent() {
-    const slotId = document.getElementById("absence-slot-picker").value;
-    const reason = document.getElementById("absence-reason").value.trim() || "Unplanned Absence";
-
-    if (!slotId) {
-      this.showToast("Please select a shift slot to mark absent.", "error");
-      return;
-    }
-
-    const loading = document.getElementById("replacement-loading");
-    const empty = document.getElementById("replacement-empty");
-    loading.style.display = "block";
-    empty.style.display = "none";
-
-    try {
-      // 1. Mark absent on server
-      const markRes = await fetch(`${API_BASE}/api/roster/mark-absent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({ slot_id: slotId, reason })
-      });
-      const markData = await markRes.json();
-      if (!markData.success) throw new Error(markData.error);
-
-      const slot = markData.data;
-      this.state.selectedSlotForAbsence = slot;
-
-      // Update Vacancy details card
-      document.getElementById("active-vacancy-card").style.display = "block";
-      document.getElementById("vacant-day-shift").textContent = `${slot.day_of_week} ${slot.shift_type}`;
-      document.getElementById("vacant-role").textContent = slot.role;
-      document.getElementById("vacant-role").className = `badge badge-${slot.role.toLowerCase()}`;
-      document.getElementById("vacant-original-staff").textContent = slot.assigned_employee_name;
-      document.getElementById("vacant-reason").textContent = reason;
-
-      // 2. Fetch ranked replacements
-      const replRes = await fetch(`${API_BASE}/api/roster/replacements?slot_id=${slotId}`);
-      const replData = await replRes.json();
-      if (!replData.success) throw new Error(replData.error);
-
-      this.renderReplacements(replData.data);
-      this.showToast(`Marked absent. Evaluated ${replData.data.eligible_count} eligible replacements.`, "info");
-      document.getElementById("badge-absence-count").textContent = "1";
-    } catch (err) {
-      this.showToast(err.message, "error");
-    } finally {
-      loading.style.display = "none";
-    }
-  },
-
-  renderReplacements(data) {
-    const list = document.getElementById("replacement-list");
-    const empty = document.getElementById("replacement-empty");
-    const ineligibleCard = document.getElementById("ineligible-card");
-    const ineligibleList = document.getElementById("ineligible-list");
-
-    document.getElementById("eligible-count").textContent = data.eligible_count;
-    document.getElementById("ineligible-count").textContent = data.ineligible_count;
-
-    list.innerHTML = "";
-
-    if (data.eligible_count === 0) {
-      list.innerHTML = `
-        <div class="alert alert-warning" style="margin-top:0.75rem;">
-          <div>⚠️ No staff meet all 5 hard constraints to cover this shift.</div>
-        </div>
-      `;
-    } else {
-      data.eligible.forEach(cand => {
-        const card = document.createElement("div");
-        card.className = `candidate-card ${cand.rank === 1 ? 'top-pick' : ''}`;
-
-        const skillsBadges = cand.skills.map(s => {
-          return `<span class="badge badge-${s.toLowerCase()}">${s}</span>`;
-        }).join(" ");
-
-        card.innerHTML = `
-          <div style="flex:1;">
-            <div class="candidate-rank">
-              <div class="rank-number">#${cand.rank}</div>
-              <div>
-                <div style="font-weight:700; color:var(--slate-900); font-size:0.95rem;">
-                  ${cand.name}
-                  ${cand.rank === 1 ? '<span class="badge badge-approved" style="margin-left:0.4rem;">Top Recommendation</span>' : ''}
-                </div>
-                <div style="font-size:0.75rem; color:var(--slate-500); margin-top:0.15rem;">
-                  ${skillsBadges}
-                </div>
+      } else {
+        candidatesContainer.innerHTML = replData.eligible.map(c => `
+          <div class="candidate-row ${c.rank === 1 ? "top-match" : ""}">
+            <div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <strong style="font-size:0.95rem;">#${c.rank} ${escapeHtml(c.name)}</strong>
+                ${c.rank === 1 ? `<span class="badge badge-supervisor">★ Top Recommended</span>` : ""}
+              </div>
+              <div style="font-size:0.75rem; color:var(--slate-500); margin-top:0.2rem;">
+                Match Score: <strong>${c.score} pts</strong> • Headroom: <strong>${c.remaining_hours}h left</strong> • Skills: ${c.skills.join(", ")}
               </div>
             </div>
-
-            <div style="margin-top:0.55rem; font-size:0.8rem; color:var(--slate-700);">
-              ${cand.ranking_explanation}
-            </div>
-
-            <div style="font-size:0.75rem; color:var(--slate-500); margin-top:0.25rem;">
-              Weekly Load: <strong>${cand.current_hours}h</strong> ➔ <strong>${cand.new_total_hours}h / ${cand.max_hours}h</strong>
-            </div>
-          </div>
-
-          <div style="text-align:right; margin-left:1rem;">
-            <div class="candidate-score">Score: ${cand.score}</div>
-            <button class="btn btn-success btn-sm" style="margin-top:0.5rem;" onclick="app.assignReplacement('${cand.employee_id}')">
+            <button class="btn btn-primary btn-sm" onclick="handleAssignReplacement('${targetSlot.id}', '${c.employee_id}')">
               Assign Cover
             </button>
           </div>
-        `;
-        list.appendChild(card);
-      });
+        `).join("");
+      }
     }
 
-    // Ineligible list
-    if (data.ineligible_count > 0) {
-      ineligibleCard.style.display = "block";
-      ineligibleList.innerHTML = "";
-      data.ineligible.forEach(inEl => {
-        const row = document.createElement("div");
-        row.style.marginBottom = "0.35rem";
-        row.innerHTML = `<strong>${inEl.name}:</strong> <span style="color:#b91c1c;">${inEl.reason}</span>`;
-        ineligibleList.appendChild(row);
-      });
-    } else {
-      ineligibleCard.style.display = "none";
-    }
-  },
-
-  async assignReplacement(empId) {
-    if (!this.state.selectedSlotForAbsence) return;
-    const slotId = this.state.selectedSlotForAbsence.id;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/roster/assign-replacement`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonBody({
-          slot_id: slotId,
-          replacement_emp_id: empId
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      this.showToast(`Cover assigned successfully to ${data.data.replaced_by_name}!`, "success");
-      await this.loadRoster();
-      // Re-trigger absence view to show replacement confirmation
-      await this.handleMarkAbsent();
-      document.getElementById("badge-absence-count").textContent = "0";
-    } catch (err) {
-      this.showToast(err.message, "error");
-    }
+    openModal("modal-replacement");
+  } catch (err) {
+    showToast("Error opening replacement modal.", "error");
   }
-};
-
-function jsonBody(obj) {
-  return JSON.stringify(obj);
 }
 
-// Start application when DOM is ready
-document.addEventListener("DOMContentLoaded", () => {
-  app.init();
-});
+async function handleAssignReplacement(slotId, replacementEmpId) {
+  try {
+    const res = await fetch("/api/roster/assign-replacement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slot_id: slotId, replacement_emp_id: replacementEmpId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, "success");
+      closeModal("modal-replacement");
+      await fetchRoster();
+      await fetchReplacementAudits();
+    } else {
+      showToast(data.error || "Failed to assign replacement", "error");
+    }
+  } catch (err) {
+    showToast("Error assigning replacement.", "error");
+  }
+}
+
+/**
+ * Fetch and Render Replacement Audit Log
+ */
+async function fetchReplacementAudits() {
+  try {
+    const res = await fetch("/api/admin/replacements-audit");
+    const data = await res.json();
+    if (data.success) {
+      state.replacementAudits = data.data || [];
+      const badge = document.getElementById("badge-admin-audit-count");
+      if (badge) badge.textContent = state.replacementAudits.length;
+      renderReplacementAudit();
+    }
+  } catch (err) {
+    console.error("Error fetching replacement audits:", err);
+  }
+}
+
+function renderReplacementAudit() {
+  const tbody = document.getElementById("replacement-audit-tbody");
+  if (!tbody) return;
+
+  if (state.replacementAudits.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">No staff replacements recorded yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = state.replacementAudits.map(a => `
+    <tr>
+      <td><strong>${escapeHtml(a.day_of_week)} ${escapeHtml(a.shift_type)}</strong></td>
+      <td><span class="skill-badge badge-${a.role.toLowerCase()}">${escapeHtml(a.role)}</span></td>
+      <td><span style="color:#b91c1c; font-weight:700;">${escapeHtml(a.original_employee_name)}</span> (Called Out)</td>
+      <td><span style="color:#15803d; font-weight:700;">${escapeHtml(a.replaced_by_name)}</span> (Covering)</td>
+      <td>${escapeHtml(a.reason)}</td>
+      <td><span style="font-size:0.75rem; color:var(--slate-500);">${escapeHtml(a.created_at || "Recent")}</span></td>
+    </tr>
+  `).join("");
+}
+
+/**
+ * ========================================================
+ * EMPLOYEE PORTAL LOGIC
+ * ========================================================
+ */
+function initEmployeePortal() {
+  const shiftsBadge = document.getElementById("badge-emp-shifts-count");
+  fetchEmployeePersonalRoster();
+}
+
+async function handleEmployeeLeaveSubmit(e) {
+  e.preventDefault();
+  const text = document.getElementById("emp-leave-text").value.trim();
+  const isUrgent = document.getElementById("emp-is-urgent-checkbox").checked;
+  const submitBtn = document.getElementById("btn-submit-emp-leave");
+
+  if (!text) {
+    showToast("Please describe your leave request reason.", "error");
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "AI Evaluating Patterns...";
+  }
+
+  try {
+    const payload = {
+      employee_id: state.currentUser.id,
+      text: text,
+      is_urgent: isUrgent,
+      proof_filename: state.activeProofFile,
+      proof_data_url: state.activeProofDataUrl
+    };
+
+    const res = await fetch("/api/employee/leave-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.error || "Failed to evaluate leave request.", "error");
+      return;
+    }
+
+    const evalRes = data.evaluation;
+    renderAiEvaluationResult(evalRes, data.data);
+    showToast(data.message, evalRes.decision === "APPROVED" ? "success" : (evalRes.decision === "REJECTED" ? "error" : "info"));
+
+    // Reset form
+    document.getElementById("form-employee-leave").reset();
+    toggleUrgentProofUpload(false);
+    state.activeProofFile = null;
+    state.activeProofDataUrl = null;
+    const filenameDisp = document.getElementById("proof-filename-display");
+    if (filenameDisp) filenameDisp.textContent = "Click or drag & drop proof document here (PDF, PNG, JPG)";
+  } catch (err) {
+    showToast("Error processing leave with AI assistant.", "error");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = "<span>✨ Submit to AI Assistant →</span>";
+    }
+  }
+}
+
+function renderAiEvaluationResult(evalRes, leaveData) {
+  const placeholder = document.getElementById("ai-evaluation-placeholder");
+  const resultCard = document.getElementById("ai-evaluation-result");
+  const decisionBanner = document.getElementById("ai-decision-banner");
+  const decisionText = document.getElementById("ai-decision-text");
+  const importanceEl = document.getElementById("ai-metric-importance");
+  const targetEl = document.getElementById("ai-metric-target");
+  const riskEl = document.getElementById("ai-metric-risk");
+  const trustEl = document.getElementById("ai-metric-trust");
+  const explanationEl = document.getElementById("ai-analysis-explanation");
+
+  if (placeholder) placeholder.style.display = "none";
+  if (resultCard) resultCard.style.display = "block";
+
+  if (decisionBanner && decisionText) {
+    decisionBanner.className = `ai-decision-badge ${evalRes.decision.toLowerCase()}`;
+    decisionText.textContent = evalRes.decision === "APPROVED" ? "✓ LEAVE APPROVED BY AI" : (evalRes.decision === "REJECTED" ? "✕ LEAVE REJECTED BY AI" : "⏳ FORWARDED TO MANAGER");
+  }
+
+  if (importanceEl) importanceEl.textContent = evalRes.reason_importance;
+  if (targetEl) targetEl.textContent = `${leaveData.day_of_week} (${leaveData.shift_type})`;
+  if (riskEl) riskEl.textContent = `${Math.round(evalRes.exploitation_risk_score * 100)}%`;
+  if (trustEl) trustEl.textContent = `${Math.round(evalRes.trust_score * 100)}%`;
+  if (explanationEl) explanationEl.textContent = evalRes.pattern_analysis;
+}
+
+/**
+ * Fetch and Render Employee Personal Schedule
+ */
+async function fetchEmployeePersonalRoster() {
+  if (!state.currentUser || !state.currentUser.id) return;
+  try {
+    const res = await fetch(`/api/employee/my-roster?employee_id=${state.currentUser.id}`);
+    const data = await res.json();
+    if (data.success) {
+      renderEmployeePersonalRoster(data.data);
+    }
+  } catch (err) {
+    console.error("Error fetching personal roster:", err);
+  }
+}
+
+function renderEmployeePersonalRoster(rosterData) {
+  const hoursEl = document.getElementById("emp-kpi-hours");
+  const barEl = document.getElementById("emp-kpi-bar");
+  const shiftsEl = document.getElementById("emp-kpi-shifts");
+  const extrasEl = document.getElementById("emp-kpi-extras");
+  const container = document.getElementById("emp-shifts-container");
+  const badge = document.getElementById("badge-emp-shifts-count");
+
+  const totalHours = rosterData.total_assigned_hours || 0;
+  const maxHours = rosterData.max_weekly_hours || 40;
+  const pct = Math.min(100, Math.round((totalHours / maxHours) * 100));
+
+  if (hoursEl) hoursEl.textContent = `${totalHours}h / ${maxHours}h`;
+  if (barEl) barEl.style.width = `${pct}%`;
+  if (shiftsEl) shiftsEl.textContent = `${rosterData.shifts.length} shifts`;
+  if (extrasEl) extrasEl.textContent = `${rosterData.extra_shifts_count} extra`;
+  if (badge) badge.textContent = `${rosterData.shifts.length} Shifts`;
+
+  if (!container) return;
+
+  if (rosterData.shifts.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; text-align:center; padding:3rem 1rem; color:var(--slate-500);">
+        <p style="font-size:1.1rem; font-weight:700;">No shifts scheduled for this week yet.</p>
+        <p style="font-size:0.85rem;">Check back after the weekly master roster is generated by your manager.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = rosterData.shifts.map(s => {
+    const isExtra = s.is_replacement_shift;
+    return `
+      <div class="emp-shift-card ${isExtra ? "extra-shift" : ""}">
+        <div>
+          ${isExtra ? `
+            <span class="extra-shift-banner">⭐ Extra Shift (Substituted for ${escapeHtml(s.substitute_for)})</span>
+          ` : ""}
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+            <strong style="font-size:1.05rem; color:var(--slate-900);">${escapeHtml(s.day_of_week)}</strong>
+            <span class="skill-badge badge-${s.role.toLowerCase()}">${escapeHtml(s.role)}</span>
+          </div>
+          <div style="font-size:0.85rem; color:var(--slate-600); margin-bottom:0.5rem;">
+            Shift: <strong>${escapeHtml(s.shift_type)} (8 hours)</strong>
+          </div>
+        </div>
+        <div style="padding-top:0.5rem; border-top:1px solid var(--slate-100); font-size:0.75rem; color:var(--slate-500);">
+          ${isExtra ? `Covering unplanned absence for coworker.` : `Regular scheduled roster shift.`}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+/**
+ * Handle Reset to Seed Data
+ */
+async function handleResetSeed() {
+  if (!confirm("Reset all employees, requests, rosters, and audits back to clean seed data?")) return;
+  try {
+    const res = await fetch("/api/employees/reset", { method: "POST" });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(data.message, "success");
+      if (state.currentUser.role === "admin") {
+        await initAdminPortal();
+      } else {
+        await fetchEmployeePersonalRoster();
+      }
+    }
+  } catch (err) {
+    showToast("Failed to reset seed data.", "error");
+  }
+}
+
+/**
+ * Modal Helpers
+ */
+function openModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.style.display = "flex";
+}
+
+function closeModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.style.display = "none";
+}
+
+// Global modal bindings
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.switchAdminTab = switchAdminTab;
+window.switchEmployeeTab = switchEmployeeTab;
+window.toggleSkillSelection = toggleSkillSelection;
+window.handleDeleteEmployee = handleDeleteEmployee;
+window.openLeaveDetailModal = openLeaveDetailModal;
+window.handleUrgentAction = handleUrgentAction;
+window.openProofModal = openProofModal;
+window.handleMarkAbsent = handleMarkAbsent;
+window.handleAssignReplacement = handleAssignReplacement;
+
+/**
+ * UI Toast notification helper
+ */
+function showToast(message, type = "info") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(10px)";
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}

@@ -1,7 +1,7 @@
 """
-AutoRoster MVP REST API Server.
+AutoRoster REST API Server.
 Built with Python standard library http.server.
-Zero external dependencies. Never leaks raw stack traces.
+Zero external runtime dependencies. Never leaks raw stack traces.
 """
 import http.server
 import socketserver
@@ -14,6 +14,7 @@ from typing import Dict, Any
 from app.database import db
 from app.solver import solve_roster
 from app.ai_parser import parse_free_text_availability
+from app.pattern_learning import evaluate_leave_request
 from app.replacement import get_ranked_replacements
 from app.seed_data import SAMPLE_MESSY_MESSAGES
 from app.models import AVAILABLE_SKILLS
@@ -39,11 +40,9 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except Exception:
-            # Safe fallback if connection dropped
             pass
 
     def _send_error(self, message: str, status: int = 400):
-        # Friendly error payload - NEVER a raw stack trace
         self._send_json({
             "success": False,
             "error": message
@@ -98,6 +97,31 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     "data": leaves,
                     "sample_messages": SAMPLE_MESSY_MESSAGES
                 })
+            elif path == "/api/admin/leave-log":
+                self._send_json({
+                    "success": True,
+                    "data": db.get_leave_log()
+                })
+            elif path == "/api/admin/urgent-leaves":
+                self._send_json({
+                    "success": True,
+                    "data": db.get_urgent_leaves()
+                })
+            elif path == "/api/admin/replacements-audit":
+                self._send_json({
+                    "success": True,
+                    "data": db.get_replacement_audits()
+                })
+            elif path == "/api/employee/my-roster":
+                emp_id = query.get("employee_id", [None])[0]
+                if not emp_id:
+                    self._send_error("Missing employee_id query parameter.")
+                    return
+                roster_data = db.get_employee_roster(emp_id)
+                self._send_json({
+                    "success": True,
+                    "data": roster_data
+                })
             elif path == "/api/roster":
                 result = db.get_roster_result()
                 self._send_json({
@@ -109,7 +133,6 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                 if not slot_id:
                     self._send_error("Missing required query parameter: slot_id")
                     return
-                # Find slot
                 target_slot = None
                 for s in db.current_roster:
                     if s.id == slot_id:
@@ -130,7 +153,7 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     "data": res
                 })
             elif path == "/api/health":
-                self._send_json({"status": "ok", "app": "AutoRoster MVP", "version": "1.0.0"})
+                self._send_json({"status": "ok", "app": "AutoRoster Portal", "version": "2.0.0"})
             else:
                 self._send_error(f"Endpoint not found: {path}", 404)
         except Exception as e:
@@ -143,10 +166,29 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
         try:
             body = self._read_json_body()
 
-            if path == "/api/employees":
+            # --- Authentication ---
+            if path == "/api/auth/login":
+                email = body.get("email", "").strip()
+                password = body.get("password", "").strip()
+                if not email or not password:
+                    self._send_error("Email and password are required.", 400)
+                    return
+                user = db.authenticate(email, password)
+                if not user:
+                    self._send_error("Invalid email or password.", 401)
+                    return
+                self._send_json({
+                    "success": True,
+                    "message": f"Welcome back, {user['name']}!",
+                    "data": user
+                })
+
+            # --- Employee Directory Management ---
+            elif path == "/api/employees":
                 name = body.get("name", "").strip()
                 skills = body.get("skills", [])
                 max_hours = body.get("max_weekly_hours", 40)
+                email = body.get("email", "").strip()
                 if not name:
                     self._send_error("Employee name cannot be empty.")
                     return
@@ -157,7 +199,7 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     name=name,
                     skills=skills,
                     max_weekly_hours=max_hours,
-                    email=body.get("email", ""),
+                    email=email,
                     phone=body.get("phone", "")
                 )
                 self._send_json({"success": True, "data": emp.to_dict()}, 201)
@@ -169,6 +211,7 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     "message": "Reset all employees, requests, and schedules to initial seed data."
                 })
 
+            # --- AI Leave Parsing & Ingestion ---
             elif path == "/api/leaves/parse":
                 text = body.get("text", "").strip()
                 if not text:
@@ -177,6 +220,69 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                 emp_list = [e.to_dict() for e in db.get_employees()]
                 parsed = parse_free_text_availability(text, emp_list)
                 self._send_json({"success": True, "data": parsed})
+
+            elif path == "/api/employee/leave-request":
+                emp_id = body.get("employee_id")
+                raw_text = body.get("text", "").strip()
+                is_urgent = bool(body.get("is_urgent", False))
+                proof_filename = body.get("proof_filename")
+                proof_data_url = body.get("proof_data_url")
+
+                if not emp_id:
+                    self._send_error("Employee ID is required.")
+                    return
+                if not raw_text:
+                    self._send_error("Please describe your leave request reason.")
+                    return
+
+                emp = db.get_employee(emp_id)
+                if not emp:
+                    self._send_error("Employee record not found.", 404)
+                    return
+
+                # 1. Parse text into structured parameters
+                emp_list = [e.to_dict() for e in db.get_employees()]
+                parsed = parse_free_text_availability(raw_text, emp_list)
+                day_of_week = parsed["day_of_week"]
+                shift_type = parsed["shift_type"]
+                detected_reason = parsed["reason"]
+
+                # 2. Run AI Pattern Learning & Anti-Exploitation evaluation
+                eval_result = evaluate_leave_request(
+                    employee=emp,
+                    raw_text=raw_text,
+                    day_of_week=day_of_week,
+                    shift_type=shift_type,
+                    detected_reason=detected_reason,
+                    is_urgent=is_urgent,
+                    has_proof=bool(proof_filename or proof_data_url),
+                    historical_leaves=db.get_leave_requests()
+                )
+
+                # 3. Save to database
+                created_lr = db.add_leave_request(
+                    employee_id=emp_id,
+                    raw_text=raw_text,
+                    day_of_week=day_of_week,
+                    shift_type=shift_type,
+                    reason=detected_reason,
+                    confidence=parsed.get("confidence", 0.95),
+                    explanation=parsed.get("explanation", ""),
+                    is_urgent=is_urgent,
+                    proof_filename=proof_filename,
+                    proof_data_url=proof_data_url,
+                    ai_decision=eval_result["decision"],
+                    reason_importance=eval_result["reason_importance"],
+                    exploitation_risk_score=eval_result["exploitation_risk_score"],
+                    pattern_analysis=eval_result["pattern_analysis"]
+                )
+
+                self._send_json({
+                    "success": True,
+                    "message": f"Leave request processed by AI: Status is {eval_result['decision']}",
+                    "data": created_lr.to_dict(),
+                    "evaluation": eval_result
+                }, 201)
 
             elif path == "/api/leaves":
                 emp_id = body.get("employee_id")
@@ -218,6 +324,25 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 self._send_json({"success": True, "data": updated.to_dict()})
 
+            elif path.startswith("/api/admin/urgent-leaves/") and path.endswith("/action"):
+                parts = path.split("/")
+                leave_id = parts[4]
+                action = body.get("action", "").upper()
+                if action not in ["APPROVE", "REJECT"]:
+                    self._send_error("Action must be APPROVE or REJECT.")
+                    return
+                new_status = "APPROVED" if action == "APPROVE" else "REJECTED"
+                updated = db.update_leave_status(leave_id, new_status)
+                if not updated:
+                    self._send_error("Urgent leave request not found.", 404)
+                    return
+                self._send_json({
+                    "success": True,
+                    "message": f"Urgent leave has been {new_status.lower()}.",
+                    "data": updated.to_dict()
+                })
+
+            # --- Solver & Roster ---
             elif path == "/api/roster/generate":
                 result = solve_roster(
                     employees=db.get_employees(),
@@ -234,7 +359,6 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
 
             elif path == "/api/roster/load-impossible":
                 db.apply_impossible_scenario()
-                # Run solver immediately so conflict is shown right away
                 result = solve_roster(
                     employees=db.get_employees(),
                     requirements=db.get_shift_requirements(),
@@ -274,7 +398,12 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                 if not updated_slot:
                     self._send_error("Unable to assign replacement.", 400)
                     return
-                self._send_json({"success": True, "data": updated_slot.to_dict()})
+                self._send_json({
+                    "success": True,
+                    "message": f"Successfully assigned {updated_slot.replaced_by_name} to cover slot.",
+                    "data": updated_slot.to_dict(),
+                    "audit_log": db.get_replacement_audits()
+                })
 
             else:
                 self._send_error(f"Endpoint not found: {path}", 404)
@@ -313,10 +442,9 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
 def run_server(port: int = PORT):
     os.makedirs(STATIC_DIR, exist_ok=True)
     server_address = ("", port)
-    # Enable SO_REUSEADDR for rapid restarts during development
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(server_address, AutoRosterHandler) as httpd:
-        print(f"AutoRoster MVP Server running at http://localhost:{port}")
+        print(f"AutoRoster Portal running at http://localhost:{port}")
         httpd.serve_forever()
 
 if __name__ == "__main__":

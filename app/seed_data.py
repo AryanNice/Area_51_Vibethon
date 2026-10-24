@@ -1,9 +1,17 @@
 """
-Pre-loaded seed data for AutoRoster MVP.
+Pre-loaded seed data for AutoRoster.
 Ensures zero-friction 1-click demos.
 """
 from typing import List, Dict
-from app.models import Employee, ShiftRoleRequirement, LeaveRequest
+from app.models import Employee, ShiftRoleRequirement, LeaveRequest, ReplacementAudit
+
+ADMIN_USER = {
+    "id": "admin-1",
+    "name": "Sarah Connor (General Manager)",
+    "email": "admin@vibecafe.com",
+    "password": "admin123",
+    "role": "admin"
+}
 
 INITIAL_EMPLOYEES: List[Employee] = [
     Employee(
@@ -11,76 +19,82 @@ INITIAL_EMPLOYEES: List[Employee] = [
         name="Alex Rivera",
         skills=["Supervisor", "Barista", "Cashier"],
         max_weekly_hours=40,
-        email="alex.r@vibecafé.com",
-        phone="555-0101"
+        email="alex@vibecafe.com",
+        phone="555-0101",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-2",
         name="Bianca Chen",
         skills=["Barista", "Cashier", "Server"],
         max_weekly_hours=32,
-        email="bianca.c@vibecafé.com",
-        phone="555-0102"
+        email="bianca@vibecafe.com",
+        phone="555-0102",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-3",
         name="Carlos Gomez",
         skills=["Cook", "Server"],
         max_weekly_hours=40,
-        email="carlos.g@vibecafé.com",
-        phone="555-0103"
+        email="carlos@vibecafe.com",
+        phone="555-0103",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-4",
         name="Dana Patel",
         skills=["Supervisor", "Cook"],
         max_weekly_hours=32,
-        email="dana.p@vibecafé.com",
-        phone="555-0104"
+        email="dana@vibecafe.com",
+        phone="555-0104",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-5",
         name="Ethan Wright",
         skills=["Cashier", "Server"],
         max_weekly_hours=32,
-        email="ethan.w@vibecafé.com",
-        phone="555-0105"
+        email="ethan@vibecafe.com",
+        phone="555-0105",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-6",
         name="Fiona Gallagher",
         skills=["Barista", "Server"],
         max_weekly_hours=32,
-        email="fiona.g@vibecafé.com",
-        phone="555-0106"
+        email="fiona@vibecafe.com",
+        phone="555-0106",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-7",
         name="George Miller",
         skills=["Cook", "Supervisor", "Cashier"],
         max_weekly_hours=40,
-        email="george.m@vibecafé.com",
-        phone="555-0107"
+        email="george@vibecafe.com",
+        phone="555-0107",
+        password="employee123",
+        role="employee"
     ),
     Employee(
         id="emp-8",
         name="Hannah Abbott",
         skills=["Server", "Barista", "Cashier"],
         max_weekly_hours=32,
-        email="hannah.a@vibecafé.com",
-        phone="555-0108"
+        email="hannah@vibecafe.com",
+        phone="555-0108",
+        password="employee123",
+        role="employee"
     ),
 ]
-
-# Standard Weekly Cafe Schedule Template:
-# Monday to Friday:
-#   Morning (8h): Supervisor, Barista (2 staff)
-#   Evening (8h): Cook, Server (2 staff)
-# Saturday & Sunday:
-#   Morning (8h): Supervisor, Barista, Server (3 staff)
-#   Evening (8h): Cook, Cashier, Server (3 staff)
-# Total = 10 shifts * 2 roles (20) + 4 shifts * 3 roles (12) = 32 slots * 8h = 256 hrs.
-# Total staff capacity = 280 hrs. Feasible with balanced distribution.
 
 DEFAULT_SHIFT_REQUIREMENTS: List[ShiftRoleRequirement] = [
     # Monday
@@ -102,7 +116,7 @@ DEFAULT_SHIFT_REQUIREMENTS: List[ShiftRoleRequirement] = [
     ShiftRoleRequirement("Thursday", "Morning", "Supervisor"),
     ShiftRoleRequirement("Thursday", "Morning", "Cashier"),
     ShiftRoleRequirement("Thursday", "Evening", "Cook"),
-    ShiftRoleRequirement("Thursday", "Evening", "Server"),
+    ShiftRoleRequirement("Thursday", "Evening", "Barista"),
     # Friday
     ShiftRoleRequirement("Friday", "Morning", "Supervisor"),
     ShiftRoleRequirement("Friday", "Morning", "Barista"),
@@ -124,7 +138,6 @@ DEFAULT_SHIFT_REQUIREMENTS: List[ShiftRoleRequirement] = [
     ShiftRoleRequirement("Sunday", "Evening", "Server"),
 ]
 
-# Quick demo messy messages ready to insert with 1-click
 SAMPLE_MESSY_MESSAGES = [
     {
         "employee_id": "emp-2",
@@ -139,12 +152,17 @@ SAMPLE_MESSY_MESSAGES = [
     {
         "employee_id": "emp-3",
         "employee_name": "Carlos Gomez",
-        "text": "Hi manager, feeling awful with flu. Doctor says bed rest this Wednesday whole day."
+        "text": "Hi manager, feeling awful with severe acute fever. Doctor ordered complete bed rest this Wednesday whole day."
     },
     {
         "employee_id": "emp-4",
         "employee_name": "Dana Patel",
-        "text": "Hey there, university exam schedule just released. I have an exam on Saturday morning so unavailable Saturday Morning."
+        "text": "Hey there, university exam schedule just released. I have a critical midterm exam on Saturday morning so unavailable Saturday Morning."
+    },
+    {
+        "employee_id": "emp-5",
+        "employee_name": "Ethan Wright",
+        "text": "Hey boss, just wanted to chill this Friday evening with the boys. Not feeling like coming in."
     }
 ]
 
@@ -156,9 +174,45 @@ INITIAL_LEAVE_REQUESTS: List[LeaveRequest] = [
         raw_text="Doctor appointment on Tuesday morning, cannot work morning shift.",
         day_of_week="Tuesday",
         shift_type="Morning",
-        reason="Doctor appointment",
+        reason="Medical / Healthcare Appointment (Doctor)",
         status="APPROVED",
         confidence=0.98,
-        explanation="Extracted day: Tuesday, shift: Morning, reason: Medical/Doctor"
+        explanation="Extracted day: Tuesday, shift: Morning, reason: Medical/Doctor",
+        reason_importance="HIGH",
+        exploitation_risk_score=0.12,
+        pattern_analysis="Pattern Analysis: First leave request in 30 days. No weekend-clustering pattern detected. Legitimate healthcare reason."
+    ),
+    LeaveRequest(
+        id="leave-urgent-seed",
+        employee_id="emp-3",
+        employee_name="Carlos Gomez",
+        raw_text="Urgent: Sudden severe food poisoning and gastroenteritis. Attached emergency clinic discharge certificate.",
+        day_of_week="Wednesday",
+        shift_type="All Day",
+        reason="Acute Gastroenteritis & Medical Bed Rest",
+        status="PENDING",
+        confidence=0.99,
+        explanation="Emergency medical leave submitted with verified clinical doctor proof.",
+        is_urgent=True,
+        proof_filename="St_Mary_Hospital_Discharge_Certificate.pdf",
+        proof_data_url="data:application/pdf;base64,JVBERi0xLjQKJcTl8uXr...",
+        reason_importance="CRITICAL",
+        exploitation_risk_score=0.05,
+        pattern_analysis="Pattern Analysis: Urgent medical emergency with uploaded proof. Low abuse risk. Routed directly to Manager approval queue."
+    )
+]
+
+INITIAL_REPLACEMENT_AUDITS: List[ReplacementAudit] = [
+    ReplacementAudit(
+        id="rep-audit-1",
+        slot_id="slot-demo-1",
+        day_of_week="Tuesday",
+        shift_type="Morning",
+        role="Barista",
+        original_employee_id="emp-2",
+        original_employee_name="Bianca Chen",
+        replaced_by_id="emp-6",
+        replaced_by_name="Fiona Gallagher",
+        reason="Covering for approved dentist appointment"
     )
 ]
