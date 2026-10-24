@@ -37,24 +37,6 @@ function initEventListeners() {
   // Login Form Submission
   document.getElementById("form-login")?.addEventListener("submit", handleLogin);
 
-  // Quick fill from credentials hint box
-  document.querySelectorAll(".credentials-box .cred-item").forEach(item => {
-    item.style.cursor = "pointer";
-    item.addEventListener("click", () => {
-      const text = item.textContent;
-      if (text.includes("admin@vibecafe.com")) {
-        document.getElementById("login-email").value = "admin@vibecafe.com";
-        document.getElementById("login-password").value = "admin123";
-      } else if (text.includes("bianca@vibecafe.com")) {
-        document.getElementById("login-email").value = "bianca@vibecafe.com";
-        document.getElementById("login-password").value = "employee123";
-      } else {
-        document.getElementById("login-email").value = "alex@vibecafe.com";
-        document.getElementById("login-password").value = "employee123";
-      }
-    });
-  });
-
   // Logout Button
   document.getElementById("btn-logout")?.addEventListener("click", handleLogout);
 
@@ -103,9 +85,6 @@ function initEventListeners() {
   const urgentCheck = document.getElementById("emp-is-urgent-checkbox");
   if (urgentCheck) {
     urgentCheck.addEventListener("change", (e) => {
-      toggleUrgentProofUpload(e.target.checked);
-    });
-  }
       toggleUrgentProofUpload(e.target.checked);
     });
   }
