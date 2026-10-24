@@ -11,7 +11,7 @@ import urllib.request
 from typing import Dict, Any, List, Optional, Tuple
 from app.models import LeaveRequest, Employee
 
-# Load Gemini API Key from environment or .env file
+# Load Gemini API Key from environment, .env file, or Streamlit secrets
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if not GEMINI_API_KEY and os.path.exists(".env"):
     try:
@@ -19,6 +19,14 @@ if not GEMINI_API_KEY and os.path.exists(".env"):
             for line in f:
                 if line.strip().startswith("GEMINI_API_KEY="):
                     GEMINI_API_KEY = line.strip().split("=", 1)[1].strip()
+    except Exception:
+        pass
+
+if not GEMINI_API_KEY:
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+            GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     except Exception:
         pass
 
