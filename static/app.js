@@ -37,31 +37,17 @@ function initEventListeners() {
   // Login Form Submission
   document.getElementById("form-login")?.addEventListener("submit", handleLogin);
 
-  // Quick 1-Click Login Chips
-  document.querySelectorAll(".quick-login-chips .btn-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      const email = chip.getAttribute("data-email");
-      const pass = chip.getAttribute("data-pass");
-      const role = chip.getAttribute("data-role");
-      document.getElementById("login-email").value = email;
-      document.getElementById("login-password").value = pass;
-      // Set active role button
-      document.querySelectorAll(".login-role-btn").forEach(b => {
-        b.classList.toggle("active", b.getAttribute("data-login-role") === role);
-      });
-      showToast(`Credentials filled for ${chip.textContent.trim()}`, "info");
-    });
-  });
-
-  // Login Role Tab Switcher
-  document.querySelectorAll(".login-role-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".login-role-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      const role = btn.getAttribute("data-login-role");
-      if (role === "admin") {
+  // Quick fill from credentials hint box
+  document.querySelectorAll(".credentials-box .cred-item").forEach(item => {
+    item.style.cursor = "pointer";
+    item.addEventListener("click", () => {
+      const text = item.textContent;
+      if (text.includes("admin@vibecafe.com")) {
         document.getElementById("login-email").value = "admin@vibecafe.com";
         document.getElementById("login-password").value = "admin123";
+      } else if (text.includes("bianca@vibecafe.com")) {
+        document.getElementById("login-email").value = "bianca@vibecafe.com";
+        document.getElementById("login-password").value = "employee123";
       } else {
         document.getElementById("login-email").value = "alex@vibecafe.com";
         document.getElementById("login-password").value = "employee123";
@@ -71,9 +57,6 @@ function initEventListeners() {
 
   // Logout Button
   document.getElementById("btn-logout")?.addEventListener("click", handleLogout);
-
-  // Reset Seed Button
-  document.getElementById("btn-reset-data")?.addEventListener("click", handleResetSeed);
 
   // Admin Sub Navigation Tabs
   document.querySelectorAll(".tab-btn[data-admin-tab]").forEach(btn => {
@@ -113,36 +96,16 @@ function initEventListeners() {
     });
   }
 
-  // Solver Buttons
+  // Solver Button
   document.getElementById("btn-generate-roster")?.addEventListener("click", handleGenerateRoster);
-  document.getElementById("btn-load-impossible")?.addEventListener("click", handleLoadImpossible);
-
-  // Employee Presets
-  document.querySelectorAll(".preset-chips .btn-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      const text = chip.getAttribute("data-preset");
-      const isUrgent = chip.getAttribute("data-urgent") === "true";
-      const input = document.getElementById("emp-leave-text");
-      const urgentCheckbox = document.getElementById("emp-is-urgent-checkbox");
-      if (input) input.value = text;
-      if (urgentCheckbox) {
-        urgentCheckbox.checked = isUrgent;
-        toggleUrgentProofUpload(isUrgent);
-      }
-      if (isUrgent) {
-        state.activeProofFile = "St_Mary_Hospital_Discharge_Certificate.pdf";
-        state.activeProofDataUrl = "data:application/pdf;base64,mockproofcertificate";
-        const filenameDisp = document.getElementById("proof-filename-display");
-        if (filenameDisp) filenameDisp.textContent = "Attached: St_Mary_Hospital_Discharge_Certificate.pdf (Verified)";
-      }
-      showToast("Preset loaded into leave request box", "info");
-    });
-  });
 
   // Urgent Toggle Checkbox
   const urgentCheck = document.getElementById("emp-is-urgent-checkbox");
   if (urgentCheck) {
     urgentCheck.addEventListener("change", (e) => {
+      toggleUrgentProofUpload(e.target.checked);
+    });
+  }
       toggleUrgentProofUpload(e.target.checked);
     });
   }
@@ -816,20 +779,6 @@ async function handleGenerateRoster() {
   }
 }
 
-async function handleLoadImpossible() {
-  try {
-    showToast("Injecting conflict scenario...", "info");
-    const res = await fetch("/api/roster/load-impossible", { method: "POST" });
-    const data = await res.json();
-    if (data.success) {
-      renderMasterRoster(data.data);
-      showToast("Impossible scenario active: All Supervisors on leave for Friday Morning.", "error");
-    }
-  } catch (err) {
-    showToast("Error triggering impossible scenario.", "error");
-  }
-}
-
 /**
  * Handle Marking Absent & Replacement Selection
  */
@@ -1035,7 +984,7 @@ async function handleEmployeeLeaveSubmit(e) {
   } finally {
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = "<span>✨ Submit to AI Assistant →</span>";
+      submitBtn.innerHTML = "<span>Submit Leave Request →</span>";
     }
   }
 }
