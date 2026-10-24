@@ -639,7 +639,12 @@ function openProofModal(leaveId) {
       </div>
     </div>
 
-    <div style="display:flex; justify-content:flex-end;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      ${leave.proof_data_url ? `
+        <a href="${leave.proof_data_url}" download="${escapeHtml(leave.proof_filename || 'Medical_Certificate.pdf')}" class="btn btn-primary btn-sm">
+          📥 Download Attached Document
+        </a>
+      ` : `<span></span>`}
       <button class="btn btn-secondary" onclick="closeModal('modal-proof-preview')">Close Preview</button>
     </div>
   `;

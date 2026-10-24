@@ -281,6 +281,22 @@ def render_admin_portal():
                     st.markdown("**AI Pattern Learning & Anti-Exploitation Diagnostics:**")
                     st.markdown(f"> {l.get('pattern_analysis') or l.get('explanation') or 'Pattern verified clean.'}")
 
+                    if l.get("proof_data_url"):
+                        try:
+                            b64_str = l["proof_data_url"].split(",", 1)[1]
+                            pdf_bytes = base64.b64decode(b64_str)
+                            fname = l.get("proof_filename") or "Medical_Certificate.pdf"
+                            mime = "application/pdf" if fname.lower().endswith(".pdf") else "image/png"
+                            st.download_button(
+                                label=f"📥 Download Attached {fname}",
+                                data=pdf_bytes,
+                                file_name=fname,
+                                mime=mime,
+                                key=f"dl_log_{l['id']}"
+                            )
+                        except Exception:
+                            pass
+
     # ---------------------------------------------------------
     # TAB 4: URGENT MEDICAL LEAVES QUEUE
     # ---------------------------------------------------------
@@ -314,6 +330,23 @@ def render_admin_portal():
                 with st.container(border=True):
                     st.markdown("**🏥 Clinical Medical Certificate Preview** (Verified Attachment)")
                     st.markdown(f"- **Patient:** {u.get('employee_name')}\n- **Assessment:** Acute Emergency Assessment - {u.get('reason')}\n- **Restriction:** Unfit for scheduled duty on {u.get('day_of_week')}\n- **File Reference:** `{u.get('proof_filename', 'Medical_Record.pdf')}`")
+                    
+                    if u.get("proof_data_url"):
+                        try:
+                            b64_str = u["proof_data_url"].split(",", 1)[1]
+                            pdf_bytes = base64.b64decode(b64_str)
+                            fname = u.get("proof_filename") or "Medical_Certificate.pdf"
+                            mime = "application/pdf" if fname.lower().endswith(".pdf") else "image/png"
+                            st.download_button(
+                                label=f"📥 Download & Inspect Submitted PDF ({fname})",
+                                data=pdf_bytes,
+                                file_name=fname,
+                                mime=mime,
+                                key=f"dl_urgent_{u['id']}",
+                                use_container_width=True
+                            )
+                        except Exception:
+                            pass
 
                 if is_pending:
                     act_col1, act_col2 = st.columns(2)
@@ -524,6 +557,13 @@ def render_employee_portal():
                         )
 
                         proof_filename = proof_file.name if proof_file else ("Doctor_Certificate.pdf" if is_urgent else None)
+                        proof_data_url = None
+                        if proof_file:
+                            file_bytes = proof_file.getvalue()
+                            b64 = base64.b64encode(file_bytes).decode("utf-8")
+                            mime = "application/pdf" if proof_file.name.lower().endswith(".pdf") else "image/png"
+                            proof_data_url = f"data:{mime};base64,{b64}"
+
                         created_lr = db.add_leave_request(
                             employee_id=user["id"],
                             raw_text=leave_text,
@@ -534,6 +574,7 @@ def render_employee_portal():
                             explanation=parsed.get("explanation", ""),
                             is_urgent=is_urgent,
                             proof_filename=proof_filename,
+                            proof_data_url=proof_data_url,
                             ai_decision=eval_result["decision"],
                             reason_importance=eval_result["reason_importance"],
                             exploitation_risk_score=eval_result["exploitation_risk_score"],
