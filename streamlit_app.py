@@ -93,6 +93,24 @@ st.markdown("""
         display: inline-block;
         margin-bottom: 0.4rem;
     }
+    
+    /* Remove 'Press Enter to submit form' and all keyboard shortcut instructions */
+    [data-testid="InputInstructions"],
+    [data-testid="InputInstructions"] *,
+    div[data-testid="InputInstructions"],
+    .stForm [data-testid="InputInstructions"],
+    div[data-testid="stFormSubmitButton"] small,
+    div[data-testid="stFormSubmitButton"] p:last-child,
+    form small {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        line-height: 0 !important;
+        font-size: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        opacity: 0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -131,11 +149,11 @@ def render_login_view():
 </div>"""
         st.markdown(login_header_html, unsafe_allow_html=True)
 
-        with st.form("form_login"):
+        with st.container(border=True):
             st.markdown("#### Sign In")
-            username = st.text_input("Work Email or Username", placeholder="name@company.com or username", autocomplete="username")
-            password = st.text_input("Password", type="password", placeholder="••••••••", autocomplete="current-password")
-            submitted = st.form_submit_button("Sign In →", type="primary", use_container_width=True)
+            username = st.text_input("Work Email or Username", placeholder="name@company.com or username", autocomplete="username", key="login_username")
+            password = st.text_input("Password", type="password", placeholder="••••••••", autocomplete="current-password", key="login_password")
+            submitted = st.button("Sign In →", type="primary", use_container_width=True, key="btn_login_submit")
 
             if submitted:
                 if not username.strip() or not password.strip():
@@ -224,13 +242,13 @@ def render_admin_portal():
         st.markdown("### Add New Employee")
         st.markdown("Register a team member with certified skills and weekly hour limits.")
 
-        with st.form("form_add_employee"):
-            name = st.text_input("Full Name *", placeholder="e.g. Maya Lin")
-            email = st.text_input("Work Email *", placeholder="e.g. maya@vibecafe.com")
-            skills = st.multiselect("Certified Roles & Skills *", AVAILABLE_SKILLS, default=["Barista"])
-            max_hours = st.select_slider("Weekly Maximum Hours", options=[16, 24, 32, 40], value=32)
+        with st.container(border=True):
+            name = st.text_input("Full Name *", placeholder="e.g. Maya Lin", key="add_emp_name")
+            email = st.text_input("Work Email *", placeholder="e.g. maya@vibecafe.com", key="add_emp_email")
+            skills = st.multiselect("Certified Roles & Skills *", AVAILABLE_SKILLS, default=["Barista"], key="add_emp_skills")
+            max_hours = st.select_slider("Weekly Maximum Hours", options=[16, 24, 32, 40], value=32, key="add_emp_hours")
 
-            btn_save = st.form_submit_button("Save Team Member →", type="primary")
+            btn_save = st.button("Save Team Member →", type="primary", key="btn_save_emp")
             if btn_save:
                 if not name.strip():
                     st.error("Please enter employee name.")
@@ -521,19 +539,20 @@ def render_employee_portal():
             st.markdown("### New Leave Request")
             st.markdown("Describe your unavailability in natural language. Our scheduling system evaluates request validity, pattern history, and anti-exploitation policy.")
 
-            with st.form("form_emp_leave"):
+            with st.container(border=True):
                 leave_text = st.text_area(
                     "Reason & Shift Details *",
                     placeholder="e.g. Doctor appointment on Tuesday morning, sister's wedding on Friday evening...",
-                    height=130
+                    height=130,
+                    key="emp_leave_text"
                 )
 
-                is_urgent = st.checkbox("🚨 Urgent medical condition requiring verification")
+                is_urgent = st.checkbox("🚨 Urgent medical condition requiring verification", key="emp_is_urgent")
                 proof_file = None
                 if is_urgent:
-                    proof_file = st.file_uploader("Attach Clinical Verification Document (PDF, PNG, JPG)", type=["pdf", "png", "jpg", "jpeg"])
+                    proof_file = st.file_uploader("Attach Clinical Verification Document (PDF, PNG, JPG)", type=["pdf", "png", "jpg", "jpeg"], key="emp_proof_file")
 
-                btn_submit = st.form_submit_button("Submit Leave Request →", type="primary", use_container_width=True)
+                btn_submit = st.button("Submit Leave Request →", type="primary", use_container_width=True, key="btn_emp_submit")
 
                 if btn_submit:
                     if not leave_text.strip():
