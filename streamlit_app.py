@@ -20,6 +20,7 @@ import streamlit as st
 import pandas as pd
 import json
 import base64
+import textwrap
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -43,21 +44,10 @@ st.set_page_config(
 # Custom Enterprise CSS Styles
 st.markdown("""
 <style>
-    /* Global Styles */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-    }
-    
-    /* Card Container */
-    .ar-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.25rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     
     /* Skill Badges */
@@ -98,31 +88,10 @@ st.markdown("""
         color: #b45309;
         font-weight: 700;
         font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
+        padding: 0.25rem 0.55rem;
         border-radius: 6px;
         display: inline-block;
         margin-bottom: 0.4rem;
-    }
-    
-    /* KPI Metric Cards */
-    .kpi-metric-box {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 1.2rem;
-        text-align: center;
-    }
-    .kpi-title { font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
-    .kpi-val { font-size: 1.8rem; font-weight: 800; color: #0f172a; margin-top: 0.25rem; }
-    
-    /* Proof Certificate Box */
-    .certificate-box {
-        background: #fffbf5;
-        border: 2px solid #fed7aa;
-        border-radius: 10px;
-        padding: 1.25rem;
-        margin: 1rem 0;
-        color: #431407;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -141,7 +110,6 @@ if "leave_submitted_eval" not in st.session_state:
 if "selected_absent_slot" not in st.session_state:
     st.session_state.selected_absent_slot = None
 
-# Helper to render skill badge HTML
 def get_skill_badges_html(skills: List[str]) -> str:
     html = ""
     for s in skills:
@@ -156,15 +124,12 @@ def render_login_view():
     col1, col2, col3 = st.columns([1, 1.8, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 1.5rem;">
-            <div style="display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:14px; background:linear-gradient(135deg, #4f46e5, #4338ca); color:white; font-size:26px; box-shadow:0 4px 12px rgba(79, 70, 229, 0.25);">
-                📅
-            </div>
-            <h1 style="font-size:1.85rem; font-weight:800; color:#0f172a; margin-top:0.75rem; margin-bottom:0.25rem;">AutoRoster</h1>
-            <p style="color:#64748b; font-size:0.95rem;">Workforce Operations & Shift Scheduling Portal</p>
-        </div>
-        """, unsafe_allow_html=True)
+        login_header_html = """<div style="text-align: center; margin-bottom: 1.5rem;">
+<div style="display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:14px; background:linear-gradient(135deg, #4f46e5, #4338ca); color:white; font-size:26px; box-shadow:0 4px 12px rgba(79, 70, 229, 0.25);">📅</div>
+<h1 style="font-size:1.85rem; font-weight:800; color:#0f172a; margin-top:0.75rem; margin-bottom:0.25rem;">AutoRoster</h1>
+<p style="color:#64748b; font-size:0.95rem;">Workforce Operations & Shift Scheduling Portal</p>
+</div>"""
+        st.markdown(login_header_html, unsafe_allow_html=True)
 
         with st.form("form_login"):
             st.markdown("#### Sign In")
@@ -236,25 +201,18 @@ def render_admin_portal():
         for idx, emp in enumerate(employees):
             col = grid_cols[idx % 2]
             with col:
-                with st.container():
-                    st.markdown(f"""
-                    <div class="ar-card">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div>
-                                <h4 style="margin:0; font-size:1.1rem; color:#0f172a;">{emp.name}</h4>
-                                <span style="font-size:0.85rem; color:#64748b;">📧 {emp.email}</span>
-                            </div>
-                            <span class="status-pill status-approved">ACTIVE</span>
-                        </div>
-                        <div style="margin-top:0.75rem; margin-bottom:0.75rem;">
-                            {get_skill_badges_html(emp.skills)}
-                        </div>
-                        <div style="font-size:0.85rem; color:#334155; font-weight:600;">
-                            ⏱️ Hourly Limit: <strong>{emp.max_weekly_hours} hours / week</strong>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"🗑 Remove {emp.name}", key=f"del_emp_{emp.id}"):
+                with st.container(border=True):
+                    c_top1, c_top2 = st.columns([3, 1])
+                    with c_top1:
+                        st.markdown(f"#### {emp.name}")
+                        st.caption(f"📧 {emp.email}")
+                    with c_top2:
+                        st.markdown('<div style="text-align:right;"><span class="status-pill status-approved">ACTIVE</span></div>', unsafe_allow_html=True)
+                    
+                    st.markdown(get_skill_badges_html(emp.skills), unsafe_allow_html=True)
+                    st.caption(f"⏱️ Hourly Limit: **{emp.max_weekly_hours} hours / week**")
+                    
+                    if st.button(f"🗑 Remove {emp.name}", key=f"del_emp_{emp.id}", type="secondary", use_container_width=True):
                         if db.delete_employee(emp.id):
                             st.success(f"Removed {emp.name} from directory.")
                             st.rerun()
@@ -343,33 +301,19 @@ def render_admin_portal():
             status = u.get("status")
             status_class = f"status-{status.lower()}"
 
-            with st.container():
-                st.markdown(f"""
-                <div class="ar-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h4 style="margin:0; font-size:1.15rem; color:#0f172a;">🚨 {u.get('employee_name')}</h4>
-                        <span class="status-pill {status_class}">{status}</span>
-                    </div>
-                    <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem;">
-                        Target Shift: <strong>{u.get('day_of_week')} ({u.get('shift_type')})</strong> • Submitted: {u.get('created_at', 'Recent')}
-                    </p>
-                    <div style="background:#f8fafc; border-left:3px solid #f97316; padding:0.75rem 1rem; border-radius:4px; margin:0.75rem 0; font-size:0.9rem;">
-                        "{u.get('raw_text')}"
-                    </div>
-                    <div class="certificate-box">
-                        <div style="display:flex; justify-content:space-between; font-weight:700; border-bottom:1px solid #fed7aa; padding-bottom:0.4rem; margin-bottom:0.5rem;">
-                            <span>🏥 Clinical Medical Certificate Preview</span>
-                            <span>Verified Attachment</span>
-                        </div>
-                        <div style="font-size:0.85rem; line-height:1.6;">
-                            • <strong>Patient:</strong> {u.get('employee_name')}<br>
-                            • <strong>Assessment:</strong> Acute Emergency Assessment - {u.get('reason')}<br>
-                            • <strong>Restriction:</strong> Unfit for scheduled duty on {u.get('day_of_week')}<br>
-                            • <strong>File Reference:</strong> <code>{u.get('proof_filename', 'Medical_Record.pdf')}</code>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+            with st.container(border=True):
+                c_u1, c_u2 = st.columns([3, 1])
+                with c_u1:
+                    st.markdown(f"#### 🚨 {u.get('employee_name')}")
+                    st.caption(f"Target Shift: **{u.get('day_of_week')} ({u.get('shift_type')})** • Submitted: {u.get('created_at', 'Recent')}")
+                with c_u2:
+                    st.markdown(f'<div style="text-align:right;"><span class="status-pill {status_class}">{status}</span></div>', unsafe_allow_html=True)
+
+                st.info(f'"{u.get("raw_text")}"')
+
+                with st.container(border=True):
+                    st.markdown("**🏥 Clinical Medical Certificate Preview** (Verified Attachment)")
+                    st.markdown(f"- **Patient:** {u.get('employee_name')}\n- **Assessment:** Acute Emergency Assessment - {u.get('reason')}\n- **Restriction:** Unfit for scheduled duty on {u.get('day_of_week')}\n- **File Reference:** `{u.get('proof_filename', 'Medical_Record.pdf')}`")
 
                 if is_pending:
                     act_col1, act_col2 = st.columns(2)
@@ -443,26 +387,17 @@ def render_admin_portal():
                     assignee = s.replaced_by_name if is_sub else (s.assigned_employee_name or "Unassigned")
                     role_cls = f"badge-{s.role.lower()}"
 
-                    with st.container():
-                        st.markdown(f"""
-                        <div style="background:{'#fffbeb' if is_sub else '#ffffff'}; border:1px solid {'#fde68a' if is_sub else '#e2e8f0'}; border-radius:8px; padding:0.6rem; margin-bottom:0.5rem; font-size:0.8rem;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-weight:700; color:#334155;">{s.shift_type}</span>
-                                <span class="skill-badge {role_cls}">{s.role}</span>
-                            </div>
-                            <div style="font-weight:800; color:#0f172a; margin-top:0.25rem;">
-                                {assignee}
-                            </div>
-                            {'<span class="extra-shift-banner">↺ Sub for ' + s.assigned_employee_name + '</span>' if is_sub else ''}
-                        </div>
-                        """, unsafe_allow_html=True)
-
+                    with st.container(border=True):
+                        st.markdown(f"**{s.shift_type}** <span class='skill-badge {role_cls}'>{s.role}</span>", unsafe_allow_html=True)
+                        st.markdown(f"**{assignee}**")
+                        if is_sub:
+                            st.caption(f"↺ Sub for {s.assigned_employee_name}")
                         if not s.is_absent:
-                            if st.button("Mark Absent", key=f"abs_{s.id}"):
+                            if st.button("Mark Absent", key=f"abs_{s.id}", use_container_width=True):
                                 st.session_state.selected_absent_slot = s.id
                                 st.rerun()
 
-        # Handle Replacement Modal / Section if an absent slot is selected
+        # Handle Replacement Section if an absent slot is selected
         if st.session_state.selected_absent_slot:
             target_id = st.session_state.selected_absent_slot
             target_slot = next((s for s in slots if s.id == target_id), None)
@@ -485,10 +420,7 @@ def render_admin_portal():
                     for c in replacements["eligible"]:
                         r_col1, r_col2 = st.columns([3, 1])
                         with r_col1:
-                            st.markdown(f"""
-                            **#{c['rank']} {c['name']}** {'⭐ Top Recommended' if c['rank'] == 1 else ''}<br>
-                            Match Score: <strong>{c['score']} pts</strong> • Remaining Hours: <strong>{c['remaining_hours']}h</strong> • Skills: {", ".join(c['skills'])}
-                            """, unsafe_allow_html=True)
+                            st.markdown(f"**#{c['rank']} {c['name']}** {'⭐ Top Recommended' if c['rank'] == 1 else ''}<br>Match Score: <strong>{c['score']} pts</strong> • Remaining Hours: <strong>{c['remaining_hours']}h</strong> • Skills: {', '.join(c['skills'])}", unsafe_allow_html=True)
                         with r_col2:
                             if st.button(f"Assign {c['name']}", key=f"assign_{target_slot.id}_{c['employee_id']}", type="primary"):
                                 db.mark_slot_absent(target_slot.id, "Sudden call-out")
@@ -620,49 +552,30 @@ def render_employee_portal():
             eval_data = st.session_state.leave_submitted_eval
 
             if not eval_data:
-                st.markdown("""
-                <div class="ar-card" style="text-align:center; padding:3rem 1rem; color:#64748b;">
-                    <span style="font-size:2.5rem;">📝</span>
-                    <h4 style="margin-top:0.75rem; color:#0f172a;">No Active Request</h4>
-                    <p style="font-size:0.85rem;">Submit your request on the left. The AI anti-exploitation system will evaluate the reason importance and pattern history immediately.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown("<div style='text-align:center; padding:2rem 1rem;'>", unsafe_allow_html=True)
+                    st.markdown("### 📝 No Active Request")
+                    st.caption("Submit your request on the left. The AI anti-exploitation system will evaluate the reason importance and pattern history immediately.")
+                    st.markdown("</div>", unsafe_allow_html=True)
             else:
                 ev = eval_data["eval"]
                 dec = ev["decision"]
                 dec_class = "status-approved" if dec == "APPROVED" else ("status-rejected" if dec == "REJECTED" else "status-pending")
                 dec_text = "✓ LEAVE APPROVED BY AI" if dec == "APPROVED" else ("✕ LEAVE REJECTED BY AI" if dec == "REJECTED" else "⏳ FORWARDED TO MANAGER FOR SIGN-OFF")
 
-                st.markdown(f"""
-                <div class="ar-card">
-                    <div style="text-align:center; padding:0.75rem; margin-bottom:1rem;" class="{dec_class}">
-                        <strong style="font-size:1.05rem;">{dec_text}</strong>
-                    </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
-                        <div class="kpi-metric-box">
-                            <div class="kpi-title">Reason Priority</div>
-                            <div style="font-size:1.15rem; font-weight:800; color:#4f46e5;">{ev['reason_importance']}</div>
-                        </div>
-                        <div class="kpi-metric-box">
-                            <div class="kpi-title">Target Shift</div>
-                            <div style="font-size:1.15rem; font-weight:800; color:#0f172a;">{eval_data['day']} ({eval_data['shift']})</div>
-                        </div>
-                        <div class="kpi-metric-box">
-                            <div class="kpi-title">Policy Compliance</div>
-                            <div style="font-size:1.15rem; font-weight:800; color:#16a34a;">{round(ev['trust_score'] * 100)}%</div>
-                        </div>
-                        <div class="kpi-metric-box">
-                            <div class="kpi-title">Exploitation Risk</div>
-                            <div style="font-size:1.15rem; font-weight:800; color:{'#dc2626' if ev['exploitation_risk_score'] >= 0.5 else '#16a34a'};">
-                                {round(ev['exploitation_risk_score'] * 100)}%
-                            </div>
-                        </div>
-                    </div>
-                    <div style="background:#f8fafc; border-left:3px solid #4f46e5; padding:0.85rem 1rem; border-radius:4px; font-size:0.85rem; line-height:1.6;">
-                        <strong>Pattern Assessment:</strong><br>{ev['pattern_analysis']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"<div style='text-align:center; padding:0.5rem;' class='{dec_class}'><strong>{dec_text}</strong></div><br>", unsafe_allow_html=True)
+
+                    c_m1, c_m2 = st.columns(2)
+                    c_m1.metric("Reason Priority", ev["reason_importance"])
+                    c_m2.metric("Target Shift", f"{eval_data['day']} ({eval_data['shift']})")
+
+                    c_m3, c_m4 = st.columns(2)
+                    c_m3.metric("Policy Compliance", f"{round(ev['trust_score'] * 100)}%")
+                    c_m4.metric("Exploitation Risk", f"{round(ev['exploitation_risk_score'] * 100)}%")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.info(f"**Pattern Assessment:**\n\n{ev['pattern_analysis']}")
 
     # ---------------------------------------------------------
     # EMPLOYEE TAB 2: MY SHIFTS THIS WEEK
@@ -703,23 +616,27 @@ def render_employee_portal():
         else:
             for s in shifts:
                 is_extra = s.get("is_replacement_shift", False)
-                role_cls = f"badge-{s.get('role', 'barista').lower()}"
+                role = s.get("role", "Barista")
+                role_cls = f"badge-{role.lower()}"
+                day = s.get("day_of_week")
+                shift_type = s.get("shift_type")
 
-                st.markdown(f"""
-                <div class="ar-card" style="border-left: 4px solid {'#f59e0b' if is_extra else '#4f46e5'};">
-                    {'<span class="extra-shift-banner">⭐ Extra Shift (Substituted for ' + s.get('substitute_for', 'Coworker') + ')</span>' if is_extra else ''}
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h4 style="margin:0; font-size:1.1rem; color:#0f172a;">{s.get('day_of_week')}</h4>
-                        <span class="skill-badge {role_cls}">{s.get('role')}</span>
-                    </div>
-                    <div style="color:#475569; font-size:0.85rem; margin-top:0.35rem;">
-                        Shift Duration: <strong>{s.get('shift_type')} (8 hours)</strong>
-                    </div>
-                    <div style="font-size:0.75rem; color:#94a3b8; margin-top:0.4rem;">
-                        {'Assigned to cover unplanned absence for coworker.' if is_extra else 'Standard scheduled shift from weekly master roster.'}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    if is_extra:
+                        sub_for = s.get('substitute_for', 'Coworker')
+                        st.markdown(f'<span class="extra-shift-banner">⭐ Extra Shift (Substituted for {sub_for})</span>', unsafe_allow_html=True)
+
+                    c_shift1, c_shift2 = st.columns([3, 1])
+                    with c_shift1:
+                        st.markdown(f"#### {day}")
+                        st.markdown(f"Shift Duration: **{shift_type} (8 hours)**")
+                    with c_shift2:
+                        st.markdown(f'<div style="text-align:right;"><span class="skill-badge {role_cls}">{role}</span></div>', unsafe_allow_html=True)
+
+                    if is_extra:
+                        st.caption("Covering unplanned absence for coworker.")
+                    else:
+                        st.caption("Standard scheduled shift from weekly master roster.")
 
 
 # ---------------------------------------------------------
