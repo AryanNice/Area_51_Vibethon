@@ -141,6 +141,19 @@ def _solve_with_cpsat(
             sum(x[(e.id, idx)] * requirements[idx].hours for idx in range(len(requirements))) <= e.max_weekly_hours
         )
 
+    # Objective: Fair workload distribution (minimize deviation from average hours)
+    total_hours_needed = sum(r.hours for r in requirements)
+    avg_hours = max(1, total_hours_needed // max(1, len(employees)))
+
+    diffs = []
+    for idx, e in enumerate(employees):
+        diff = model.NewIntVar(0, 60, f"diff_{e.id}")
+        emp_hours = sum(x[(e.id, s_idx)] * requirements[s_idx].hours for s_idx in range(len(requirements)))
+        model.AddAbsEquality(diff, emp_hours - avg_hours)
+        diffs.append(diff)
+
+    model.Minimize(sum(diffs))
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 5.0
     status = solver.Solve(model)
