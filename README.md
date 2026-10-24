@@ -7,10 +7,13 @@
 
 ## 🌟 Quickstart (Run Locally)
 
-AutoRoster has **zero external package dependencies**. It runs entirely using the Python 3 standard library and modern native browser web standards.
+AutoRoster combines **Google OR-Tools CP-SAT** constraint programming with a pure Python standard library fallback. It can run in any environment:
 
 ```bash
-# 1. Start the local server
+# 1. (Optional) Install ortools for CP-SAT solver acceleration:
+pip install ortools
+
+# 2. Start the local server:
 python server.py
 
 # 2. Open your browser at:
@@ -39,13 +42,13 @@ python -m unittest discover tests
 - Manager Approval Queue: One-click **Approve** or **Reject** actions.
 
 ### Screen 3: Weekly Master Roster & Conflict Solver
-- **Strict Hard-Constraint CSP Solver:** Enforces all 5 non-negotiable rules:
+- **Google OR-Tools CP-SAT Solver (Member 1 Core):** Mathematical integer constraint programming solver enforcing all 5 non-negotiable hard constraints:
   1. Shift coverage
   2. Approved unavailability/leave
   3. Required certified skills
   4. Weekly hour limit
   5. Max one shift per day
-- **Never Fakes a Result:** Solves in milliseconds.
+- **Never Fakes a Result:** Solves in milliseconds with global mathematical proof.
 - **Truthful Conflict Explainer:** Includes a **"Trigger Impossible Scenario"** button (simulating all supervisors on leave for Friday morning). The solver immediately pinpoints the exact mathematical bottleneck and specifies the contributing factors and recommended action.
 - Interactive 7-day calendar grid (Monday through Sunday, Morning and Evening shifts).
 

@@ -13,6 +13,12 @@ from typing import List, Dict, Any, Optional, Set, Tuple
 from app.models import Employee, LeaveRequest, ShiftRoleRequirement, RosterSlot, ConflictDetail
 import uuid
 
+try:
+    from ortools.sat.python import cp_model
+    HAS_ORTOOLS = True
+except ImportError:
+    HAS_ORTOOLS = False
+
 def is_employee_on_leave(emp_id: str, day: str, shift: str, approved_leaves: List[LeaveRequest]) -> Tuple[bool, Optional[str]]:
     """Checks if employee has approved leave on this day & shift."""
     for leave in approved_leaves:
@@ -90,13 +96,103 @@ def analyze_conflicts(
 
     return conflicts
 
+def _solve_with_cpsat(
+    employees: List[Employee],
+    requirements: List[ShiftRoleRequirement],
+    approved_leaves: List[LeaveRequest],
+    emp_map: Dict[str, Employee]
+) -> Optional[Dict[str, Any]]:
+    """Google OR-Tools CP-SAT solver implementation for hard constraints."""
+    model = cp_model.CpModel()
+
+    # Decision variables: x[(e_id, slot_idx)] == 1 if employee assigned to slot
+    x = {}
+    for e in employees:
+        for idx in range(len(requirements)):
+            x[(e.id, idx)] = model.NewBoolVar(f"x_{e.id}_{idx}")
+
+    # 1. Shift coverage: Exactly 1 employee per requirement slot
+    for idx in range(len(requirements)):
+        model.Add(sum(x[(e.id, idx)] for e in employees) == 1)
+
+    # 2. Required skills
+    for idx, req in enumerate(requirements):
+        for e in employees:
+            if req.role not in e.skills:
+                model.Add(x[(e.id, idx)] == 0)
+
+    # 3. Approved leave
+    for e in employees:
+        for idx, req in enumerate(requirements):
+            on_leave, _ = is_employee_on_leave(e.id, req.day_of_week, req.shift_type, approved_leaves)
+            if on_leave:
+                model.Add(x[(e.id, idx)] == 0)
+
+    # 4. Max 1 shift per day
+    days = set(r.day_of_week for r in requirements)
+    for day in days:
+        day_indices = [idx for idx, r in enumerate(requirements) if r.day_of_week == day]
+        for e in employees:
+            model.Add(sum(x[(e.id, idx)] for idx in day_indices) <= 1)
+
+    # 5. Weekly hour limit
+    for e in employees:
+        model.Add(
+            sum(x[(e.id, idx)] * requirements[idx].hours for idx in range(len(requirements))) <= e.max_weekly_hours
+        )
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 5.0
+    status = solver.Solve(model)
+
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        result_slots = []
+        hours_worked = {e.id: 0 for e in employees}
+        for idx, req in enumerate(requirements):
+            for e in employees:
+                if solver.Value(x[(e.id, idx)]) == 1:
+                    hours_worked[e.id] += req.hours
+                    result_slots.append(RosterSlot(
+                        id=f"slot-{idx+1}",
+                        day_of_week=req.day_of_week,
+                        shift_type=req.shift_type,
+                        role=req.role,
+                        hours=req.hours,
+                        assigned_employee_id=e.id,
+                        assigned_employee_name=e.name
+                    ))
+                    break
+
+        stats = {
+            "total_slots": len(requirements),
+            "total_hours": sum(r.hours for r in requirements),
+            "solver_engine": "Google OR-Tools CP-SAT",
+            "employee_hours": {
+                e.id: {
+                    "name": e.name,
+                    "hours_worked": hours_worked[e.id],
+                    "max_hours": e.max_weekly_hours,
+                    "utilization_pct": round((hours_worked[e.id] / e.max_weekly_hours) * 100, 1)
+                }
+                for e in employees
+            }
+        }
+        return {
+            "status": "SUCCESS",
+            "slots": result_slots,
+            "conflicts": [],
+            "stats": stats
+        }
+    return None
+
 def solve_roster(
     employees: List[Employee],
     requirements: List[ShiftRoleRequirement],
     approved_leaves: List[LeaveRequest]
 ) -> Dict[str, Any]:
     """
-    Strict CSP Backtracking Solver with MRV heuristic.
+    Roster Solver utilizing Google OR-Tools CP-SAT as primary solver,
+    with CSP Backtracking fallback.
     Enforces all 5 hard constraints:
       1. Shift coverage
       2. Approved leave
@@ -128,7 +224,15 @@ def solve_roster(
             "stats": {}
         }
 
-    # Prepare CSP problem variables
+    emp_map = {e.id: e for e in employees}
+
+    # Primary Solver: Google OR-Tools CP-SAT
+    if HAS_ORTOOLS:
+        cpsat_res = _solve_with_cpsat(employees, requirements, approved_leaves, emp_map)
+        if cpsat_res:
+            return cpsat_res
+
+    # Fallback or Diagnosis via CSP problem variables
     # Each slot is an assignment target
     slots = []
     for idx, req in enumerate(requirements):
@@ -141,7 +245,6 @@ def solve_roster(
         })
 
     # Precompute candidate domains for each slot
-    emp_map = {e.id: e for e in employees}
     slot_domains: List[List[str]] = []
 
     for slot in slots:
