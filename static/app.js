@@ -37,6 +37,23 @@ function initEventListeners() {
   // Login Form Submission
   document.getElementById("form-login")?.addEventListener("submit", handleLogin);
 
+  // Password Visibility Toggle
+  const btnTogglePassword = document.getElementById("btn-toggle-password");
+  const loginPasswordInput = document.getElementById("login-password");
+  const eyeShow = document.getElementById("eye-icon-show");
+  const eyeHide = document.getElementById("eye-icon-hide");
+
+  if (btnTogglePassword && loginPasswordInput) {
+    btnTogglePassword.addEventListener("click", () => {
+      const isPassword = loginPasswordInput.type === "password";
+      loginPasswordInput.type = isPassword ? "text" : "password";
+      if (eyeShow && eyeHide) {
+        eyeShow.style.display = isPassword ? "none" : "block";
+        eyeHide.style.display = isPassword ? "block" : "none";
+      }
+    });
+  }
+
   // Logout Button
   document.getElementById("btn-logout")?.addEventListener("click", handleLogout);
 
@@ -407,6 +424,22 @@ async function fetchLeaveLog() {
       state.leavesLog = data.data || [];
       const badge = document.getElementById("badge-admin-log-count");
       if (badge) badge.textContent = state.leavesLog.length;
+
+      // Update KPI metrics on Leave Decision Log
+      const totalCount = state.leavesLog.length;
+      const approvedCount = state.leavesLog.filter(l => l.status === "APPROVED").length;
+      const pendingCount = state.leavesLog.filter(l => l.status === "PENDING").length;
+      const rejectedCount = state.leavesLog.filter(l => l.status === "REJECTED").length;
+
+      const elTotal = document.getElementById("kpi-log-total");
+      const elApproved = document.getElementById("kpi-log-approved");
+      const elPending = document.getElementById("kpi-log-pending");
+      const elRejected = document.getElementById("kpi-log-rejected");
+      if (elTotal) elTotal.textContent = totalCount;
+      if (elApproved) elApproved.textContent = approvedCount;
+      if (elPending) elPending.textContent = pendingCount;
+      if (elRejected) elRejected.textContent = rejectedCount;
+
       renderLeaveLog();
     }
   } catch (err) {
@@ -432,14 +465,22 @@ function renderLeaveLog() {
     const statusCls = `status-${l.status.toLowerCase()}`;
     const riskPct = Math.round((l.exploitation_risk_score || 0) * 100);
     const riskBadgeCls = riskPct >= 50 ? "badge-cook" : (riskPct >= 25 ? "badge-barista" : "badge-cashier");
+    
+    // Status text: "Granted" if APPROVED, "Not Granted" if REJECTED, "Pending Review" if PENDING
+    const statusLabel = l.status === "APPROVED" ? "Granted" : (l.status === "REJECTED" ? "Not Granted" : "In Review");
+    
+    // Reason: Highlight approved reason clearly
+    const reasonDisplay = l.status === "APPROVED"
+      ? `<strong style="color:var(--status-approved-text);">✓ ${escapeHtml(l.reason)}</strong>`
+      : `<span style="color:var(--secondary);">${escapeHtml(l.reason || "-")}</span>`;
 
     return `
       <tr style="cursor: pointer;" onclick="openLeaveDetailModal('${l.id}')" title="Click to view full message and AI pattern breakdown">
-        <td><span class="status-pill ${statusCls}">${l.status}</span></td>
+        <td><span class="status-pill ${statusCls}">${statusLabel}</span></td>
         <td><strong>${escapeHtml(l.created_at || "Recent")}</strong></td>
         <td><strong>${escapeHtml(l.employee_name)}</strong></td>
         <td>${escapeHtml(l.day_of_week)} (${escapeHtml(l.shift_type)})</td>
-        <td>${escapeHtml(l.reason || "-")}</td>
+        <td>${reasonDisplay}</td>
         <td><span class="skill-badge badge-server">${escapeHtml(l.reason_importance || "MEDIUM")}</span></td>
         <td><span class="skill-badge ${riskBadgeCls}">${riskPct}% Risk</span></td>
         <td>
@@ -459,27 +500,29 @@ function openLeaveDetailModal(leaveId) {
   const modalBody = document.getElementById("modal-leave-detail-body");
   if (!modalBody) return;
 
+  const statusLabel = leave.status === "APPROVED" ? "Granted (Approved)" : (leave.status === "REJECTED" ? "Not Granted (Rejected)" : "Pending Review / Escalated");
+
   modalBody.innerHTML = `
     <div style="margin-bottom: 1.25rem;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-        <h4 style="font-size:1.1rem; font-weight:800; color:var(--slate-900);">${escapeHtml(leave.employee_name)}</h4>
-        <span class="status-pill status-${leave.status.toLowerCase()}">${leave.status}</span>
+        <h4 style="font-size:1.1rem; font-weight:600; color:var(--text-slate);">${escapeHtml(leave.employee_name)}</h4>
+        <span class="status-pill status-${leave.status.toLowerCase()}">${statusLabel}</span>
       </div>
-      <p style="font-size:0.8rem; color:var(--slate-500);">Submitted on: ${escapeHtml(leave.created_at || "Recent")} • Target: ${leave.day_of_week} ${leave.shift_type}</p>
+      <p style="font-size:0.8rem; color:var(--secondary);">Date of Issue: <strong>${escapeHtml(leave.created_at || "Recent")}</strong> • Target Shift: <strong>${escapeHtml(leave.day_of_week)} (${escapeHtml(leave.shift_type)})</strong></p>
     </div>
 
-    <div style="background:var(--slate-50); border:1px solid var(--slate-200); border-radius:8px; padding:1rem; margin-bottom:1.25rem;">
-      <h5 style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--slate-500); margin-bottom:0.4rem;">Original Message Sent by Employee:</h5>
-      <p style="font-size:0.92rem; font-style:italic; color:var(--slate-800); line-height:1.6;">"${escapeHtml(leave.raw_text)}"</p>
+    <div style="background:var(--surface-low); border:1px solid var(--border-hairline); border-radius:6px; padding:1rem; margin-bottom:1.25rem;">
+      <h5 style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--secondary); margin-bottom:0.4rem; letter-spacing:0.04em;">Original Message Sent by Employee:</h5>
+      <p style="font-size:0.92rem; font-style:italic; color:var(--text-slate); line-height:1.6;">"${escapeHtml(leave.raw_text)}"</p>
     </div>
 
     <div class="ai-metrics-grid" style="margin-bottom:1.25rem;">
       <div class="ai-metric-item">
-        <span class="metric-label">Extracted Reason</span>
+        <span class="metric-label">Reason for Leave ${leave.status === "APPROVED" ? "(Approved)" : ""}</span>
         <span class="metric-value" style="font-size:0.85rem;">${escapeHtml(leave.reason)}</span>
       </div>
       <div class="ai-metric-item">
-        <span class="metric-label">Reason Importance</span>
+        <span class="metric-label">Reason Priority</span>
         <span class="metric-value">${escapeHtml(leave.reason_importance || "MEDIUM")}</span>
       </div>
       <div class="ai-metric-item">
@@ -493,15 +536,15 @@ function openLeaveDetailModal(leaveId) {
     </div>
 
     <div class="ai-analysis-box" style="margin-bottom:1.25rem;">
-      <h4>Pattern Learning & Anti-Exploitation Diagnostics:</h4>
-      <p>${escapeHtml(leave.pattern_analysis || leave.explanation || "Pattern verified clean.")}</p>
+      <h4>AI Anti-Exploitation & Pattern Learning Diagnostics:</h4>
+      <p>${escapeHtml(leave.pattern_analysis || leave.explanation || "Pattern verified clean. Legitimate submission.")}</p>
     </div>
 
     ${leave.is_urgent && leave.proof_filename ? `
-      <div style="background:#fffbeb; border:1px solid #fed7aa; border-radius:8px; padding:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+      <div style="background:var(--status-urgent-bg); border:1px solid var(--status-urgent-border); border-radius:6px; padding:0.85rem; display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <span style="font-size:0.75rem; font-weight:700; color:#c2410c; text-transform:uppercase;">Attached Medical Proof:</span>
-          <div style="font-weight:700; color:#9a3412;">📄 ${escapeHtml(leave.proof_filename)}</div>
+          <span style="font-size:0.75rem; font-weight:600; color:var(--status-urgent-text); text-transform:uppercase;">Attached Medical Proof:</span>
+          <div style="font-weight:600; color:#9a3412;">📄 ${escapeHtml(leave.proof_filename)}</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="openProofModal('${leave.id}')">View Certificate</button>
       </div>

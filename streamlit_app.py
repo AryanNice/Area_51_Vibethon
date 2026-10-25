@@ -46,13 +46,43 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
     
-    html, body, [class*="css"], .stMarkdown, p, div, span, label, input, button {
+    html, body, [class*="css"], .stMarkdown, p, label, input {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         -webkit-font-smoothing: antialiased;
     }
     
     code, pre, .font-mono {
         font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* Ensure icon ligatures always use Material Symbols and are not overridden */
+    [data-testid*="Icon"],
+    [class*="material-symbols"],
+    [data-testid="stIconMaterial"],
+    i,
+    span[translate="no"] {
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined", sans-serif !important;
+    }
+
+    /* Streamlit Password Visibility Button Reset */
+    div[data-testid="stTextInputRootElement"] button,
+    button[aria-label="Show password"],
+    button[aria-label="Hide password"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 0.4rem !important;
+        min-height: unset !important;
+        height: auto !important;
+        color: #64748b !important;
+    }
+    div[data-testid="stTextInputRootElement"] button:hover {
+        background: transparent !important;
+        color: #0f172a !important;
+        border: none !important;
+    }
+    div[data-testid="stTextInputRootElement"] button * {
+        font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -80,7 +110,7 @@ st.markdown("""
         transform: scale(0.99) !important;
     }
 
-    button[kind="secondary"] {
+    button[kind="secondary"]:not([aria-label*="password"]):not([aria-label*="Password"]):not([data-testid*="Password"]) {
         background-color: #ffffff !important;
         color: #0f172a !important;
         border: 1px solid #e2e8f0 !important;
@@ -88,11 +118,11 @@ st.markdown("""
         font-weight: 600 !important;
         transition: all 0.15s ease !important;
     }
-    button[kind="secondary"]:hover {
+    button[kind="secondary"]:not([aria-label*="password"]):not([aria-label*="Password"]):not([data-testid*="Password"]):hover {
         background-color: #f8fafc !important;
         border-color: #cbd5e1 !important;
     }
-    button[kind="secondary"]:active {
+    button[kind="secondary"]:not([aria-label*="password"]):not([aria-label*="Password"]):not([data-testid*="Password"]):active {
         transform: scale(0.99) !important;
     }
 
@@ -395,33 +425,67 @@ def render_admin_portal():
         st.markdown("### Leave Requests & Audit Trail")
         st.markdown("Audited record of employee submissions evaluated by AI and manager decisions.")
 
-        filter_choice = st.radio("Filter Status:", ["ALL", "APPROVED", "REJECTED", "PENDING"], horizontal=True)
-        logs = db.get_leave_log()
-        if filter_choice != "ALL":
-            logs = [l for l in logs if l.get("status") == filter_choice]
+        all_logs = db.get_leave_log()
+        total_logs = len(all_logs)
+        approved_count = len([l for l in all_logs if l.get("status") == "APPROVED"])
+        pending_count = len([l for l in all_logs if l.get("status") == "PENDING"])
+        rejected_count = len([l for l in all_logs if l.get("status") == "REJECTED"])
 
-        if not logs:
-            st.info(f"No records found matching status '{filter_choice}'.")
+        # Summary Analytical KPI Metric Tiles
+        lkpi1, lkpi2, lkpi3, lkpi4 = st.columns(4)
+        lkpi1.metric("Total Submissions", total_logs, "Audited Records")
+        lkpi2.metric("Granted (Approved)", approved_count, "AI Cleared")
+        lkpi3.metric("Pending / Escalated", pending_count, "Manager Review")
+        lkpi4.metric("Not Granted (Rejected)", rejected_count, "Policy Blocked")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        filter_choice = st.radio(
+            "Filter Audit Records:",
+            ["All Records", "Granted (Approved)", "Not Granted (Rejected)", "Pending (In Review)"],
+            horizontal=True
+        )
+
+        filtered_logs = all_logs
+        if filter_choice == "Granted (Approved)":
+            filtered_logs = [l for l in all_logs if l.get("status") == "APPROVED"]
+        elif filter_choice == "Not Granted (Rejected)":
+            filtered_logs = [l for l in all_logs if l.get("status") == "REJECTED"]
+        elif filter_choice == "Pending (In Review)":
+            filtered_logs = [l for l in all_logs if l.get("status") == "PENDING"]
+
+        if not filtered_logs:
+            st.info(f"No records found matching filter '{filter_choice}'.")
         else:
-            for l in logs:
+            for l in filtered_logs:
                 status = l.get("status", "PENDING")
                 status_class = f"status-{status.lower()}"
+                status_label = "Granted (Approved)" if status == "APPROVED" else ("Not Granted (Rejected)" if status == "REJECTED" else "Pending Review / Escalated")
                 risk_pct = round((l.get("exploitation_risk_score") or 0) * 100)
                 risk_color = "#dc2626" if risk_pct >= 50 else ("#d97706" if risk_pct >= 25 else "#16a34a")
 
-                with st.expander(f"{status} | {l.get('employee_name')} — {l.get('day_of_week')} ({l.get('shift_type')}) • {l.get('reason')}"):
+                reason_str = l.get("reason", "Personal Request")
+                header_text = f"{status_label.upper()} | {l.get('employee_name')} — {l.get('day_of_week')} ({l.get('shift_type')}) • Reason: {reason_str}"
+
+                with st.expander(header_text, expanded=(status == "PENDING")):
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.markdown(f"**Status:** <span class='status-pill {status_class}'>{status}</span>", unsafe_allow_html=True)
-                    c2.markdown(f"**Importance:** `{l.get('reason_importance', 'MEDIUM')}`")
-                    c3.markdown(f"**Policy Risk:** <strong style='color:{risk_color};'>{risk_pct}%</strong>", unsafe_allow_html=True)
-                    c4.markdown(f"**Date:** {l.get('created_at', 'Recent')}")
+                    c1.markdown(f"**Leave Decision:**<br><span class='status-pill {status_class}'>{status_label}</span>", unsafe_allow_html=True)
+                    c2.markdown(f"**Date of Issue:**<br><strong>{l.get('created_at', 'Recent')}</strong>", unsafe_allow_html=True)
+                    c3.markdown(f"**Reason Priority:**<br>`{l.get('reason_importance', 'MEDIUM')}`", unsafe_allow_html=True)
+                    c4.markdown(f"**Exploitation Risk:**<br><strong style='color:{risk_color};'>{risk_pct}% Risk</strong>", unsafe_allow_html=True)
 
                     st.markdown("<br>", unsafe_allow_html=True)
+                    if status == "APPROVED":
+                        st.success(f"✓ **Approved Reason for Leave:** {reason_str}")
+                    elif status == "REJECTED":
+                        st.error(f"✕ **Rejected Reason:** {reason_str} (Exploitation Risk: {risk_pct}%)")
+                    else:
+                        st.warning(f"⏳ **Pending Reason:** {reason_str} (Awaiting Manager Sign-off)")
+
                     st.markdown("**Original Employee Message to AI:**")
                     st.info(f'"{l.get("raw_text")}"')
 
-                    st.markdown("**AI Pattern Learning & Anti-Exploitation Diagnostics:**")
-                    st.markdown(f"> {l.get('pattern_analysis') or l.get('explanation') or 'Pattern verified clean.'}")
+                    st.markdown("**AI Anti-Exploitation Diagnostics & Pattern Learning:**")
+                    st.markdown(f"> {l.get('pattern_analysis') or l.get('explanation') or 'Pattern verified clean. Legitimate submission.'}")
 
                     if l.get("proof_data_url"):
                         try:

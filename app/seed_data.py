@@ -178,6 +178,7 @@ INITIAL_LEAVE_REQUESTS: List[LeaveRequest] = [
         status="APPROVED",
         confidence=0.98,
         explanation="Extracted day: Tuesday, shift: Morning, reason: Medical/Doctor",
+        ai_decision="APPROVED",
         reason_importance="HIGH",
         exploitation_risk_score=0.12,
         pattern_analysis="Pattern Analysis: First leave request in 30 days. No weekend-clustering pattern detected. Legitimate healthcare reason."
@@ -196,9 +197,26 @@ INITIAL_LEAVE_REQUESTS: List[LeaveRequest] = [
         is_urgent=True,
         proof_filename="St_Mary_Hospital_Discharge_Certificate.pdf",
         proof_data_url="data:application/pdf;base64,JVBERi0xLjQKJcTl8uXr...",
+        ai_decision="PENDING",
         reason_importance="CRITICAL",
         exploitation_risk_score=0.05,
         pattern_analysis="Pattern Analysis: Urgent medical emergency with uploaded proof. Low abuse risk. Routed directly to Manager approval queue."
+    ),
+    LeaveRequest(
+        id="leave-seed-3",
+        employee_id="emp-5",
+        employee_name="Ethan Wright",
+        raw_text="Hey boss, just wanted to chill this Friday evening with the boys. Not feeling like coming in.",
+        day_of_week="Friday",
+        shift_type="Evening",
+        reason="Personal Leisure / Non-urgent",
+        status="REJECTED",
+        confidence=0.96,
+        explanation="Extracted day: Friday, shift: Evening, reason: Leisure/Unsubstantiated",
+        ai_decision="REJECTED",
+        reason_importance="LOW",
+        exploitation_risk_score=0.88,
+        pattern_analysis="Pattern Analysis: High exploitation risk (88%). Recurring Friday evening leave requests detected. Reason has low operational priority. AI policy rejected autonomously."
     )
 ]
 
