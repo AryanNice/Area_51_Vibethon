@@ -44,19 +44,99 @@ st.set_page_config(
 # Custom Enterprise CSS Styles
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
     
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    html, body, [class*="css"], .stMarkdown, p, div, span, label, input, button {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
     }
     
-    /* Skill Badges */
+    code, pre, .font-mono {
+        font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.015em !important;
+    }
+
+    /* Primary & Secondary Buttons (Slate Executive HR) */
+    button[kind="primary"] {
+        background-color: #0f172a !important;
+        color: #ffffff !important;
+        border: 1px solid #0f172a !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.01em !important;
+        transition: all 0.15s ease !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #1e293b !important;
+        border-color: #1e293b !important;
+    }
+    button[kind="primary"]:active {
+        transform: scale(0.99) !important;
+    }
+
+    button[kind="secondary"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        transition: all 0.15s ease !important;
+    }
+    button[kind="secondary"]:hover {
+        background-color: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+    }
+    button[kind="secondary"]:active {
+        transform: scale(0.99) !important;
+    }
+
+    /* Container Card Borders & Elevation */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+    }
+
+    /* Tabs Styling */
+    button[data-baseweb="tab"] {
+        font-weight: 500 !important;
+        color: #515f74 !important;
+        font-size: 0.85rem !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #0f172a !important;
+        font-weight: 600 !important;
+        border-bottom-color: #0f172a !important;
+    }
+
+    /* Metrics Styling */
+    div[data-testid="stMetricValue"] {
+        font-weight: 600 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.015em !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-weight: 600 !important;
+        color: #515f74 !important;
+        text-transform: uppercase !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.04em !important;
+    }
+
+    /* Skill Badges (Tailored 4px Radius) */
     .skill-badge {
         display: inline-block;
-        padding: 0.22rem 0.6rem;
-        border-radius: 9999px;
+        padding: 0.2rem 0.55rem;
+        border-radius: 4px;
         font-size: 0.72rem;
-        font-weight: 700;
+        font-weight: 600;
         letter-spacing: 0.02em;
         margin-right: 0.3rem;
         margin-bottom: 0.3rem;
@@ -67,31 +147,72 @@ st.markdown("""
     .badge-cashier { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
     .badge-server { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
     
-    /* Status Pills */
+    /* Status Pills (Tailored 4px Radius) */
     .status-pill {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 800;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
     }
-    .status-approved { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
-    .status-rejected { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
-    .status-pending { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .status-pill::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+    .status-approved { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .status-approved::before { background: #047857; }
+    
+    .status-rejected { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status-rejected::before { background: #dc2626; }
+    
+    .status-pending { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    .status-pending::before { background: #64748b; }
+
+    .status-urgent { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .status-urgent::before { background: #ea580c; }
     
     /* Extra Shift Highlight */
     .extra-shift-banner {
-        background: #fffbeb;
-        border: 1px solid #fde68a;
-        color: #b45309;
-        font-weight: 700;
-        font-size: 0.75rem;
-        padding: 0.25rem 0.55rem;
-        border-radius: 6px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #c2410c;
+        font-weight: 600;
+        font-size: 0.72rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
         display: inline-block;
         margin-bottom: 0.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    /* Live AI Engine Badge */
+    .status-pill-active-engine {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 4px;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        color: #047857;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+    .status-live-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #047857;
     }
     
     /* Remove 'Press Enter to submit form' and all keyboard shortcut instructions */
@@ -143,9 +264,9 @@ def render_login_view():
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
         login_header_html = """<div style="text-align: center; margin-bottom: 1.5rem;">
-<div style="display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:14px; background:linear-gradient(135deg, #4f46e5, #4338ca); color:white; font-size:26px; box-shadow:0 4px 12px rgba(79, 70, 229, 0.25);">📅</div>
-<h1 style="font-size:1.85rem; font-weight:800; color:#0f172a; margin-top:0.75rem; margin-bottom:0.25rem;">AutoRoster</h1>
-<p style="color:#64748b; font-size:0.95rem;">Workforce Operations & Shift Scheduling Portal</p>
+<div style="display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:8px; background:#0f172a; color:white; font-size:22px; box-shadow:0 4px 6px -1px rgba(15, 23, 42, 0.2);">📅</div>
+<h1 style="font-size:1.6rem; font-weight:600; color:#0f172a; margin-top:0.75rem; margin-bottom:0.25rem; letter-spacing:-0.02em;">AutoRoster</h1>
+<p style="color:#515f74; font-size:0.875rem;">Enterprise Workforce & Leave Management</p>
 </div>"""
         st.markdown(login_header_html, unsafe_allow_html=True)
 
@@ -179,7 +300,10 @@ def render_admin_portal():
     # Top Header Bar
     head_col1, head_col2 = st.columns([3, 1])
     with head_col1:
-        st.markdown(f"## 🏢 Manager Operations Hub <span style='font-size:0.95rem; color:#64748b; font-weight:normal;'>• Main Store Branch</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"## 🏢 Manager Operations Hub <span class='status-pill-active-engine' style='margin-left:0.5rem;'><span class='status-live-dot'></span><span class='status-live-text'>AI Engine: Active</span></span><br><span style='font-size:0.85rem; color:#515f74; font-weight:normal;'>Main Store Branch • Executive HR</span>",
+            unsafe_allow_html=True
+        )
     with head_col2:
         st.markdown(f"<div style='text-align:right;'><strong>{user['name']}</strong><br><span class='status-pill status-approved'>Store Manager</span></div>", unsafe_allow_html=True)
         if st.button("Sign Out", key="admin_logout", type="secondary", use_container_width=True):
@@ -517,7 +641,10 @@ def render_employee_portal():
     # Header Bar
     head_col1, head_col2 = st.columns([3, 1])
     with head_col1:
-        st.markdown(f"## ☕ Employee Self-Service <span style='font-size:0.95rem; color:#64748b; font-weight:normal;'>• AutoRoster Portal</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"## ☕ Employee Self-Service <span class='status-pill-active-engine' style='margin-left:0.5rem;'><span class='status-live-dot'></span><span class='status-live-text'>AI Engine: Active</span></span><br><span style='font-size:0.85rem; color:#515f74; font-weight:normal;'>AutoRoster Portal • Chronos Triage</span>",
+            unsafe_allow_html=True
+        )
     with head_col2:
         st.markdown(f"<div style='text-align:right;'><strong>{user['name']}</strong><br><span class='status-pill status-pending'>Staff Member</span></div>", unsafe_allow_html=True)
         if st.button("Sign Out", key="emp_logout", type="secondary", use_container_width=True):
