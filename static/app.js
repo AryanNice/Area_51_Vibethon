@@ -86,6 +86,52 @@ function initEventListeners() {
   // Admin Add Employee Form
   document.getElementById("form-admin-add-employee")?.addEventListener("submit", handleAdminAddEmployee);
 
+  // Custom Skill Creator in Add Employee Form
+  const btnAddCustom = document.getElementById("btn-add-custom-skill");
+  const inputCustom = document.getElementById("input-new-custom-skill");
+  if (btnAddCustom && inputCustom) {
+    btnAddCustom.addEventListener("click", () => {
+      const val = inputCustom.value.trim();
+      if (val) {
+        registerCustomSkill(val, true);
+        inputCustom.value = "";
+      }
+    });
+    inputCustom.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = inputCustom.value.trim();
+        if (val) {
+          registerCustomSkill(val, true);
+          inputCustom.value = "";
+        }
+      }
+    });
+  }
+
+  // Custom Skill Creator in Staff Directory
+  const btnDirAdd = document.getElementById("dir-btn-add-skill");
+  const inputDir = document.getElementById("dir-input-new-skill");
+  if (btnDirAdd && inputDir) {
+    btnDirAdd.addEventListener("click", () => {
+      const val = inputDir.value.trim();
+      if (val) {
+        registerCustomSkill(val, false);
+        inputDir.value = "";
+      }
+    });
+    inputDir.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = inputDir.value.trim();
+        if (val) {
+          registerCustomSkill(val, false);
+          inputDir.value = "";
+        }
+      }
+    });
+  }
+
   // Max Hours Display updates
   const addHoursInput = document.getElementById("add-emp-hours");
   if (addHoursInput) {
@@ -288,13 +334,56 @@ async function fetchStaff() {
     const data = await res.json();
     if (data.success) {
       state.staff = data.data || [];
+      if (data.available_skills && Array.isArray(data.available_skills)) {
+        state.availableSkills = data.available_skills;
+      }
       const badge = document.getElementById("badge-admin-staff-count");
       if (badge) badge.textContent = state.staff.length;
       renderStaffDirectory();
+      renderStoreSkillsCatalog();
+      renderSkillChips();
     }
   } catch (err) {
     console.error("Error fetching staff:", err);
   }
+}
+
+function getSkillBadgeCls(skill) {
+  const s = (skill || "").toLowerCase().trim();
+  const known = [
+    "supervisor", "barista", "cook", "cashier", "server",
+    "baker", "mixologist", "bartender", "dishwasher",
+    "host", "greeter", "delivery", "driver", "security", "cleaner", "lead"
+  ];
+  for (const k of known) {
+    if (s.includes(k)) return `badge-${k}`;
+  }
+  const hash = Math.abs(s.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 5;
+  const variants = ["badge-supervisor", "badge-barista", "badge-cook", "badge-cashier", "badge-server"];
+  return variants[hash];
+}
+
+function renderStoreSkillsCatalog() {
+  const container = document.getElementById("store-skills-pill-container");
+  if (!container) return;
+
+  const counts = {};
+  state.staff.forEach(emp => {
+    (emp.skills || []).forEach(s => {
+      counts[s] = (counts[s] || 0) + 1;
+    });
+  });
+
+  container.innerHTML = state.availableSkills.map(s => {
+    const cls = getSkillBadgeCls(s);
+    const count = counts[s] || 0;
+    return `
+      <span class="skill-badge ${cls}" style="display:inline-flex; align-items:center; gap:0.35rem;" title="${count} staff member(s) certified in ${escapeHtml(s)}">
+        <span>${escapeHtml(s)}</span>
+        <span style="background:rgba(0,0,0,0.08); padding:0 0.35rem; border-radius:10px; font-size:0.65rem; font-weight:700;">${count}</span>
+      </span>
+    `;
+  }).join("");
 }
 
 function renderStaffDirectory() {
@@ -308,8 +397,8 @@ function renderStaffDirectory() {
 
   container.innerHTML = state.staff.map(emp => {
     const skillBadges = (emp.skills || []).map(s => {
-      const cls = `badge-${s.toLowerCase()}`;
-      return `<span class="skill-badge ${cls}">${s}</span>`;
+      const cls = getSkillBadgeCls(s);
+      return `<span class="skill-badge ${cls}">${escapeHtml(s)}</span>`;
     }).join(" ");
 
     return `
@@ -335,14 +424,61 @@ function renderStaffDirectory() {
   }).join("");
 }
 
-function renderSkillChips() {
+function renderSkillChips(selectedSet = null) {
   const container = document.getElementById("admin-skill-chips-container");
   if (!container) return;
-  container.innerHTML = state.availableSkills.map(skill => `
-    <span class="skill-chip" data-skill="${skill}" onclick="toggleSkillSelection(this)">
-      ${skill}
-    </span>
-  `).join("");
+
+  const currentlySelected = selectedSet || new Set(
+    Array.from(document.querySelectorAll("#admin-skill-chips-container .skill-chip.selected"))
+      .map(c => c.getAttribute("data-skill"))
+  );
+
+  container.innerHTML = state.availableSkills.map(skill => {
+    const isSel = currentlySelected.has(skill);
+    return `
+      <span class="skill-chip ${isSel ? 'selected' : ''}" data-skill="${escapeHtml(skill)}" onclick="toggleSkillSelection(this)">
+        ${escapeHtml(skill)}
+      </span>
+    `;
+  }).join("");
+}
+
+async function registerCustomSkill(skillName, autoSelect = false) {
+  const clean = (skillName || "").trim();
+  if (!clean) return;
+  const titleSkill = clean.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
+  try {
+    const res = await fetch("/api/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: titleSkill })
+    });
+    const data = await res.json();
+    if (data.success && data.data) {
+      state.availableSkills = data.data;
+    } else if (!state.availableSkills.includes(titleSkill)) {
+      state.availableSkills.push(titleSkill);
+    }
+
+    const currentSelected = new Set(
+      Array.from(document.querySelectorAll("#admin-skill-chips-container .skill-chip.selected"))
+        .map(c => c.getAttribute("data-skill"))
+    );
+    if (autoSelect) {
+      currentSelected.add(titleSkill);
+    }
+    renderSkillChips(currentSelected);
+    renderStoreSkillsCatalog();
+    showToast(`✓ Custom skill '${titleSkill}' added!`);
+  } catch (err) {
+    console.error("Error registering custom skill:", err);
+    if (!state.availableSkills.includes(titleSkill)) {
+      state.availableSkills.push(titleSkill);
+      renderSkillChips();
+      renderStoreSkillsCatalog();
+    }
+  }
 }
 
 function toggleSkillSelection(elem) {

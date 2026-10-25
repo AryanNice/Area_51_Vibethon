@@ -4,7 +4,7 @@ In-memory and thread-safe data store with reset and persistence capabilities.
 import copy
 import uuid
 from typing import List, Dict, Optional, Any
-from app.models import Employee, LeaveRequest, ShiftRoleRequirement, RosterSlot, ReplacementAudit
+from app.models import Employee, LeaveRequest, ShiftRoleRequirement, RosterSlot, ReplacementAudit, AVAILABLE_SKILLS
 from app.seed_data import (
     ADMIN_USER,
     INITIAL_EMPLOYEES,
@@ -21,6 +21,7 @@ class DataStore:
     def reset_to_seed(self):
         """Restore pristine seed state."""
         self.admin = copy.deepcopy(ADMIN_USER)
+        self.available_skills: List[str] = list(AVAILABLE_SKILLS)
         self.employees: Dict[str, Employee] = {
             e.id: copy.deepcopy(e) for e in INITIAL_EMPLOYEES
         }
@@ -112,6 +113,42 @@ class DataStore:
             del self.employees[emp_id]
             # Also clean up leaves
             self.leave_requests = {k: v for k, v in self.leave_requests.items() if v.employee_id != emp_id}
+            return True
+        return False
+
+    # --- Skill Certifications Catalog ---
+    def get_available_skills(self) -> List[str]:
+        """Returns the list of all certified skills in the store catalog, including custom skills."""
+        skills = list(self.available_skills)
+        for emp in self.employees.values():
+            for s in emp.skills:
+                clean = s.strip()
+                if clean and not any(existing.lower() == clean.lower() for existing in skills):
+                    skills.append(clean)
+        return skills
+
+    def add_custom_skill(self, skill_name: str) -> bool:
+        """Adds a new custom skill role to the organization's certified skill set."""
+        clean = skill_name.strip()
+        if not clean:
+            return False
+        # Normalize Title Case e.g. "head mixologist" -> "Head Mixologist"
+        title_skill = " ".join(word.capitalize() for word in clean.split())
+        current = self.get_available_skills()
+        if any(s.lower() == title_skill.lower() for s in current):
+            return False
+        self.available_skills.append(title_skill)
+        return True
+
+    def delete_custom_skill(self, skill_name: str) -> bool:
+        """Removes a custom skill from available skills catalog (preserves core default skills)."""
+        clean = skill_name.strip().lower()
+        if clean in [s.lower() for s in AVAILABLE_SKILLS]:
+            return False  # Protect core initial skills
+        to_remove = [s for s in self.available_skills if s.lower() == clean]
+        if to_remove:
+            for s in to_remove:
+                self.available_skills.remove(s)
             return True
         return False
 

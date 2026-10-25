@@ -155,5 +155,39 @@ class TestAutoRosterAPI(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(assign_res["data"]["replaced_by_id"], top_cand["employee_id"])
 
+    def test_05_skills_endpoints(self):
+        """Test listing available skills, adding custom skill, and assigning to employee."""
+        # Check initial skills
+        code, res = self._call("GET", "/api/skills")
+        self.assertEqual(code, 200)
+        self.assertTrue(res["success"])
+        self.assertIn("Supervisor", res["data"])
+        self.assertIn("Barista", res["data"])
+
+        # Add a custom skill
+        code, add_res = self._call("POST", "/api/skills", {"name": "Mixologist"})
+        self.assertEqual(code, 201)
+        self.assertTrue(add_res["success"])
+        self.assertIn("Mixologist", add_res["data"])
+
+        # Validation on empty skill
+        code, err_res = self._call("POST", "/api/skills", {"name": "   "})
+        self.assertEqual(code, 400)
+        self.assertFalse(err_res["success"])
+
+        # Add employee with the new custom skill
+        code, emp_res = self._call("POST", "/api/employees", {
+            "name": "Sammy Mix",
+            "skills": ["Mixologist", "Cashier"],
+            "max_weekly_hours": 30,
+            "email": "sammy@vibecafe.com"
+        })
+        self.assertEqual(code, 201)
+        self.assertIn("Mixologist", emp_res["data"]["skills"])
+
+        # Verify skills list includes Mixologist
+        code, skills_res = self._call("GET", "/api/skills")
+        self.assertIn("Mixologist", skills_res["data"])
+
 if __name__ == "__main__":
     unittest.main()

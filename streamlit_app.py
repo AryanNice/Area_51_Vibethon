@@ -279,10 +279,23 @@ if "leave_submitted_eval" not in st.session_state:
 if "selected_absent_slot" not in st.session_state:
     st.session_state.selected_absent_slot = None
 
+def get_skill_badge_class(s: str) -> str:
+    s_low = s.lower().strip()
+    known = [
+        "supervisor", "barista", "cook", "cashier", "server",
+        "baker", "mixologist", "bartender", "dishwasher",
+        "host", "greeter", "delivery", "driver", "security", "cleaner", "lead"
+    ]
+    for k in known:
+        if k in s_low:
+            return f"badge-{k}"
+    h = sum(ord(c) for c in s_low) % 5
+    return ["badge-supervisor", "badge-barista", "badge-cook", "badge-cashier", "badge-server"][h]
+
 def get_skill_badges_html(skills: List[str]) -> str:
     html = ""
     for s in skills:
-        cls = f"badge-{s.lower()}"
+        cls = get_skill_badge_class(s)
         html += f'<span class="skill-badge {cls}">{s}</span> '
     return html
 
@@ -366,6 +379,24 @@ def render_admin_portal():
         kpi3.metric("Baristas / Cashiers", len([e for e in employees if "Barista" in e.skills or "Cashier" in e.skills]))
         kpi4.metric("Cooks / Servers", len([e for e in employees if "Cook" in e.skills or "Server" in e.skills]))
 
+        # Store Skill Catalog & Custom Roles Manager Expander
+        with st.expander("🏷️ Certified Store Skill Set & Custom Roles Catalog", expanded=False):
+            st.markdown("All certified skill roles recognized across this store location. You can register new custom skill specializations at any time.")
+            all_current_skills = db.get_available_skills()
+            st.markdown(get_skill_badges_html(all_current_skills), unsafe_allow_html=True)
+
+            c_sk_in1, c_sk_in2 = st.columns([3, 1])
+            with c_sk_in1:
+                cat_new_skill = st.text_input("Register New Custom Skill Role", placeholder="e.g. Mixologist, Baker, Dishwasher, Security...", label_visibility="collapsed", key="cat_new_skill")
+            with c_sk_in2:
+                if st.button("+ Register Skill", key="btn_cat_add_skill", type="secondary", use_container_width=True):
+                    if cat_new_skill.strip():
+                        if db.add_custom_skill(cat_new_skill.strip()):
+                            st.success(f"✓ Registered '{cat_new_skill.strip()}' in certified skill catalog!")
+                            st.rerun()
+                        else:
+                            st.info(f"Skill '{cat_new_skill.strip()}' is already in catalog.")
+
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("### Registered Team Members")
 
@@ -399,7 +430,27 @@ def render_admin_portal():
         with st.container(border=True):
             name = st.text_input("Full Name *", placeholder="e.g. Maya Lin", key="add_emp_name")
             email = st.text_input("Work Email *", placeholder="e.g. maya@vibecafe.com", key="add_emp_email")
-            skills = st.multiselect("Certified Roles & Skills *", AVAILABLE_SKILLS, default=["Barista"], key="add_emp_skills")
+            
+            all_avail_skills = db.get_available_skills()
+            col_sk1, col_sk2 = st.columns([2.5, 1.5])
+            with col_sk1:
+                skills = st.multiselect(
+                    "Certified Roles & Skills *",
+                    options=all_avail_skills,
+                    default=["Barista"] if "Barista" in all_avail_skills else [all_avail_skills[0]],
+                    key="add_emp_skills"
+                )
+            with col_sk2:
+                st.markdown("<label style='font-size:0.8rem; font-weight:600;'>+ New Custom Skill</label>", unsafe_allow_html=True)
+                new_skill_input = st.text_input("New Skill", placeholder="e.g. Mixologist", label_visibility="collapsed", key="input_custom_skill")
+                if st.button("+ Add Custom Skill", key="btn_add_custom_skill", type="secondary", use_container_width=True):
+                    if new_skill_input.strip():
+                        if db.add_custom_skill(new_skill_input.strip()):
+                            st.success(f"✓ Added '{new_skill_input.strip()}'!")
+                            st.rerun()
+                        else:
+                            st.info(f"Skill '{new_skill_input.strip()}' already in catalog.")
+
             max_hours = st.select_slider("Weekly Maximum Hours", options=[16, 24, 32, 40], value=32, key="add_emp_hours")
 
             btn_save = st.button("Save Team Member →", type="primary", key="btn_save_emp")

@@ -88,7 +88,12 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({
                     "success": True,
                     "data": employees,
-                    "available_skills": AVAILABLE_SKILLS
+                    "available_skills": db.get_available_skills()
+                })
+            elif path == "/api/skills":
+                self._send_json({
+                    "success": True,
+                    "data": db.get_available_skills()
                 })
             elif path == "/api/leaves":
                 leaves = [lr.to_dict() for lr in db.get_leave_requests()]
@@ -203,6 +208,18 @@ class AutoRosterHandler(http.server.SimpleHTTPRequestHandler):
                     phone=body.get("phone", "")
                 )
                 self._send_json({"success": True, "data": emp.to_dict()}, 201)
+
+            elif path == "/api/skills":
+                skill_name = body.get("name", "").strip()
+                if not skill_name:
+                    self._send_error("Skill name cannot be empty.")
+                    return
+                added = db.add_custom_skill(skill_name)
+                self._send_json({
+                    "success": True,
+                    "message": f"Skill '{skill_name}' registered successfully." if added else f"Skill '{skill_name}' already exists in catalog.",
+                    "data": db.get_available_skills()
+                }, 201)
 
             elif path == "/api/employees/reset":
                 db.reset_to_seed()

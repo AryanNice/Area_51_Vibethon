@@ -601,13 +601,16 @@ code, .font-mono, .code-text {
 }
 
 /* Color Skill Badges (Tailored Palette) */
-.skill-badge, .badge-supervisor, .badge-barista, .badge-cook, .badge-cashier, .badge-server {
+.skill-badge {
   font-size: 0.72rem;
   font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: var(--radius-sm);
   display: inline-block;
   letter-spacing: 0.02em;
+  background: var(--surface-low);
+  color: var(--secondary);
+  border: 1px solid var(--border-hairline);
 }
 
 .badge-supervisor { background: var(--skill-supervisor-bg); color: var(--skill-supervisor-text); border: 1px solid var(--skill-supervisor-border); }
@@ -615,6 +618,34 @@ code, .font-mono, .code-text {
 .badge-cook { background: var(--skill-cook-bg); color: var(--skill-cook-text); border: 1px solid var(--skill-cook-border); }
 .badge-cashier { background: var(--skill-cashier-bg); color: var(--skill-cashier-text); border: 1px solid var(--skill-cashier-border); }
 .badge-server { background: var(--skill-server-bg); color: var(--skill-server-text); border: 1px solid var(--skill-server-border); }
+
+/* Common Custom Role Badges */
+.badge-baker { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.badge-mixologist, .badge-bartender { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+.badge-dishwasher { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.badge-host, .badge-greeter { background: #fdf4ff; color: #a21caf; border: 1px solid #f0abfc; }
+.badge-delivery, .badge-driver { background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc; }
+.badge-security { background: #f8fafc; color: #0f172a; border: 1px solid #94a3b8; }
+.badge-cleaner { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; }
+.badge-lead { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+
+/* Custom Skill Creator Inline Bar */
+.custom-skill-creator-box {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-low);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.custom-skill-input {
+  max-width: 250px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
 
 
 /* ======================================================== */

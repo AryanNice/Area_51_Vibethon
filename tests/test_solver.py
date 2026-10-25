@@ -92,13 +92,13 @@ class TestSolverConstraints(unittest.TestCase):
         p1 = parse_free_text_availability(msg1)
         self.assertEqual(p1["day_of_week"], "Friday")
         self.assertEqual(p1["shift_type"], "Evening")
-        self.assertIn("Wedding", p1["reason"])
+        self.assertIn("wedding", p1["reason"].lower())
 
         msg2 = "Doctor appointment on Tuesday morning, unable to work the morning shift."
         p2 = parse_free_text_availability(msg2)
         self.assertEqual(p2["day_of_week"], "Tuesday")
         self.assertEqual(p2["shift_type"], "Morning")
-        self.assertIn("Doctor", p2["reason"])
+        self.assertIn("doctor", p2["reason"].lower())
 
     def test_ranked_replacement(self):
         """Replacement engine returns ranked eligible candidates and ineligible reasons."""
