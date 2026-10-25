@@ -1,9 +1,10 @@
 """
 Free-text availability & leave parser.
 Extracts structured day, shift, and reason from messy employee messages.
-Zero external runtime dependencies.
+Powered by Gemini 3.8 Flash AI with local rule-based fallback.
 """
 import re
+import json
 from typing import Dict, Any, List, Optional
 from app.models import DAYS_OF_WEEK
 
@@ -33,9 +34,33 @@ def parse_free_text_availability(text: str, candidate_employees: Optional[List[D
     raw_text = text.strip()
     lower = raw_text.lower()
 
-    # 1. Detect Day of Week
+    # 0. Try Gemini 3.8 Flash AI extraction if available
+    try:
+        from app.pattern_learning import call_gemini_api
+        gemini_prompt = (
+            f"Extract structured shift absence details from this employee message: '{raw_text}'. "
+            f"Respond with ONLY valid JSON with keys: 'day_of_week' (one of Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday), "
+            f"'shift_type' (one of 'Morning', 'Evening', or 'All Day'), and 'reason' (short string). Do not wrap in markdown or code blocks."
+        )
+        gemini_raw = call_gemini_api(gemini_prompt)
+        if gemini_raw:
+            clean_json = gemini_raw.strip().replace("```json", "").replace("```", "").strip()
+            data = json.loads(clean_json)
+            day = data.get("day_of_week")
+            if day in DAYS_MAP.values():
+                return {
+                    "day_of_week": day,
+                    "shift_type": data.get("shift_type", "All Day"),
+                    "reason": data.get("reason", "Personal leave"),
+                    "detected_employee_id": None,
+                    "confidence": 0.98,
+                    "explanation": f"[Gemini 3.8 Flash AI] Extracted Day='{day}', Shift='{data.get('shift_type')}', Reason='{data.get('reason')}'."
+                }
+    except Exception:
+        pass
+
+    # 1. Fallback: Detect Day of Week via regex
     detected_day = None
-    # Look for exact day tokens or word boundary patterns
     for token, formal_day in DAYS_MAP.items():
         pattern = r'\b' + re.escape(token) + r'\b'
         if re.search(pattern, lower):
@@ -43,7 +68,6 @@ def parse_free_text_availability(text: str, candidate_employees: Optional[List[D
             break
 
     if not detected_day:
-        # Default to Friday if not found or look for today/tomorrow/weekend
         if "weekend" in lower:
             detected_day = "Saturday"
         else:
@@ -62,7 +86,6 @@ def parse_free_text_availability(text: str, candidate_employees: Optional[List[D
     elif is_evening and not is_morning:
         detected_shift = "Evening"
     elif is_morning and is_evening:
-        # Check context: "can't do morning, can do evening"
         if re.search(r"(can't|cannot|unable|won't be able|no).*morning", lower):
             detected_shift = "Morning"
         elif re.search(r"(can't|cannot|unable|won't be able|no).*(evening|night)", lower):
@@ -87,12 +110,10 @@ def parse_free_text_availability(text: str, candidate_employees: Optional[List[D
     for pat, label in reason_patterns:
         match = re.search(pat, lower)
         if match:
-            # Try to grab the exact phrase
             matched_phrase = match.group(0).capitalize()
             detected_reason = f"{label} ({matched_phrase})"
             break
     else:
-        # Check for clauses after "because", "due to", "for"
         cause_match = re.search(r'(?:because|due to|reason is|need to|have to)\s+([^,.;\n]+)', lower)
         if cause_match:
             snippet = cause_match.group(1).strip()

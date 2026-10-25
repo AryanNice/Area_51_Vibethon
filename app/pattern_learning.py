@@ -156,30 +156,32 @@ def analyze_employee_pattern(
     }
 
 def call_gemini_api(prompt: str) -> Optional[str]:
-    """Helper to query Gemini API if key is available."""
+    """Helper to query Gemini API if key is available, trying compatible model endpoints."""
     if not GEMINI_API_KEY:
         return None
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-        data = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 300}
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(data).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            res_data = json.loads(resp.read().decode("utf-8"))
-            candidates = res_data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts:
-                    return parts[0].get("text", "")
-    except Exception:
-        # Graceful fallback to local engine
-        pass
+    models = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
+    for model in models:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+            data = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 250}
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(data).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                res_data = json.loads(resp.read().decode("utf-8"))
+                candidates = res_data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+        except Exception:
+            continue
     return None
 
 def evaluate_leave_request(
@@ -253,6 +255,19 @@ def evaluate_leave_request(
         )
 
     explanation_parts.append(pattern_summary)
+
+    # 4. Invoke Gemini API for LLM policy assessment if key is active
+    gemini_prompt = (
+        f"You are AutoRoster AI, an enterprise workforce operations policy assistant. "
+        f"An employee named {employee.name} submitted a leave request: '{raw_text}'. "
+        f"Target shift: {day_of_week} ({shift_type}). Detected reason: '{detected_reason}'. "
+        f"Reason Importance Tier: {importance_tier}. Exploitation Risk: {int(risk_score * 100)}%. "
+        f"System Decision: {decision}. "
+        f"Provide a concise, professional 1-2 sentence policy justification explaining why this decision was reached and how their attendance pattern was evaluated."
+    )
+    gemini_analysis = call_gemini_api(gemini_prompt)
+    if gemini_analysis:
+        explanation_parts.insert(0, f"[Gemini 3.8 Flash AI] {gemini_analysis}")
 
     return {
         "decision": decision,
